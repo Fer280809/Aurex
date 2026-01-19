@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asta Bot - Panel Premium</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #FF2E63;
+            --secondary: #7D5FFF;
+            --dark: #1A1B26;
+            --darker: #12121C;
+            --light: #252836;
+            --text: #E4E7EC;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background: linear-gradient(135deg, var(--darker) 0%, var(--dark) 100%);
+            color: var(--text);
+            min-height: 100vh;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        
+        .premium-badge {
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            color: #000;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .glass-card {
+            background: rgba(26, 27, 38, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .bot-card {
+            transition: transform 0.3s;
+            cursor: pointer;
+        }
+        
+        .bot-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+        }
+        
+        .online { color: #4CAF50; }
+        .offline { color: #FF5252; }
+        .connecting { color: #FFC107; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="glass-card">
+            <h1><i class="fas fa-crown"></i> Panel Premium Asta Bot</h1>
+            <div id="user-info"></div>
+        </header>
+        
+        <div class="glass-card">
+            <h2><i class="fas fa-robot"></i> Crear Nuevo Bot</h2>
+            <form id="create-bot-form">
+                <input type="tel" id="bot-phone" placeholder="Número del bot (con código país)" required>
+                <input type="text" id="bot-label" placeholder="Nombre del bot" required>
+                <button type="submit" class="btn-premium">
+                    <i class="fas fa-plus"></i> Crear Bot Premium
+                </button>
+            </form>
+        </div>
+        
+        <div class="glass-card">
+            <h2><i class="fas fa-list"></i> Mis Bots Premium</h2>
+            <div id="bots-list"></div>
+        </div>
+        
+        <div id="bot-editor" class="glass-card" style="display: none;">
+            <h2><i class="fas fa-edit"></i> Editor de Bot</h2>
+            <form id="edit-bot-form">
+                <!-- Campos de edición aquí -->
+            </form>
+        </div>
+    </div>
+    
+    <script src="/js/panel.js"></script>
+</body>
+</html>
