@@ -1,64 +1,64 @@
-import { createPremiumBot, startPremiumBot } from '../sockets/premium.js'
 import fs from 'fs'
+import path from 'path'
+import qrcode from 'qrcode'
 
 let handler = async (m, { conn, args, usedPrefix, command }) => {
   const senderDigits = m.sender.split('@')[0]
-  const isPremium = global.premiumUsers.includes(senderDigits) || 
-                   global.owner.map(v => v.replace(/\D/g, '')).includes(senderDigits)
   
-  if (!isPremium) {
-    return m.reply(`❀ Este comando es exclusivo para usuarios premium.\nContacta al propietario para adquirir premium.`)
+  // Verificar premium
+  if (!global.premiumUsers || !global.premiumUsers.includes(senderDigits)) {
+    if (!global.owner || !global.owner.map(v => v.replace(/\D/g, '')).includes(senderDigits)) {
+      return m.reply('❀ Solo usuarios premium pueden usar este comando.')
+    }
   }
   
   const botPhone = args[0]
-  const label = args.slice(1).join(' ') || `Bot de ${m.name}`
+  const label = args.slice(1).join(' ') || `Bot de ${m.name || 'Usuario'}`
   
   if (!botPhone) {
-    return m.reply(`❀ Uso: ${usedPrefix}crearbot <número> [nombre]\nEj: ${usedPrefix}crearbot 521234567890 Mi Bot Premium`)
+    return m.reply(`❀ Uso: ${usedPrefix}crearbot <número> [nombre]`)
   }
   
   try {
     await m.react('🕒')
     
-    // Crear bot premium
-    const botConfig = await createPremiumBot(senderDigits, botPhone, label)
+    let botDigits = botPhone.replace(/\D/g, '')
+    if (botDigits.length === 10) botDigits = '52' + botDigits
     
-    // Iniciar bot para generar QR
-    const sock = await startPremiumBot(botPhone)
+    // Crear sesión básica
+    const sessionDir = path.join('Sessions', 'Premium', senderDigits, botDigits)
+    if (!fs.existsSync(sessionDir)) {
+      fs.mkdirSync(sessionDir, { recursive: true })
+    }
     
-    // Enviar mensaje con instrucciones
-    const message = `✨ *BOT PREMIUM CREADO* ✨
-
-✅ *Nombre:* ${label}
-✅ *Número:* +${botPhone}
-✅ *Propietario:* @${m.sender.split('@')[0]}
-✅ *Fecha:* ${new Date().toLocaleDateString('es-MX')}
-
-📱 *Para conectar:*
-1. Ve a WhatsApp > Ajustes
-2. Dispositivos vinculados
-3. Escanea el código QR
-4. ¡Listo! Tu bot estará funcionando
-
-🌐 *Panel de control:* http://localhost:3000
-🔧 *Para editar configuración:* Usa el panel web
-
-*Recuerda:* Tu bot premium tiene reconexión automática y características exclusivas.`
+    // Guardar en base de datos
+    if (!global.premiumBots) global.premiumBots = {}
     
-    await conn.reply(m.chat, message, m, { mentions: [m.sender] })
+    global.premiumBots[botDigits] = {
+      owner: senderDigits,
+      phone: botDigits,
+      label: label,
+      created: new Date().toISOString(),
+      status: 'pending'
+    }
+    
+    if (global.savePremiumData) {
+      global.savePremiumData()
+    }
+    
+    const message = `✨ *BOT CREADO* ✨
+
+✅ Nombre: ${label}
+✅ Número: +${botDigits}
+📅 Fecha: ${new Date().toLocaleDateString()}
+
+⚠️ *Sistema premium en desarrollo*
+Por ahora, usa el comando normal /serbot o /qr para crear bots.
+
+Próximamente: Panel web completo.`
+    
+    await conn.reply(m.chat, message, m)
     await m.react('✅')
-    
-    // Intentar enviar QR por WhatsApp
-    setTimeout(async () => {
-      try {
-        const qrPath = botConfig.sessionPath + '/qr.png'
-        if (fs.existsSync(qrPath)) {
-          await conn.sendFile(m.chat, qrPath, 'qr.png', 'Escanea este QR para conectar tu bot premium', m)
-        }
-      } catch (e) {
-        console.log('No se pudo enviar QR:', e.message)
-      }
-    }, 2000)
     
   } catch (error) {
     await m.react('❌')
