@@ -71,13 +71,12 @@ adonix: { url: "https://api-adonix.ultraplus.click", key: 'Destroy-xyz' }
 }
 
 //*======== SISTEMA PREMIUM COMPLETO ========*
-global.premiumUsers = [] // Usuarios premium
-global.premiumBots = {} // Configuraciones de bots premium
-global.premiumConns = [] // Conexiones activas premium
+global.premiumUsers = []
+global.premiumBots = {}
+global.premiumConns = []
 
-// Características premium
 global.premiumFeatures = {
-  maxSubBots: 5, // Máximo 5 bots por usuario
+  maxSubBots: 5,
   customPrefix: true,
   customBanner: true,
   customIcon: true,
@@ -90,11 +89,9 @@ global.premiumFeatures = {
   alwaysOnline: true,
   webPanel: true,
   backupAuto: true,
-  autoRestart: true,
-  prioritySupport: true
+  autoRestart: true
 }
 
-// URLs por defecto para bots premium
 global.defaultConfig = {
   banner: "https://cdn.sockywa.xyz/files/JmRs.jpeg",
   icon: "https://cdn.sockywa.xyz/files/RTnq.jpeg",
@@ -108,7 +105,6 @@ global.defaultConfig = {
   currency: "ⓐsteroides"
 }
 
-// Función para guardar datos premium
 global.savePremiumData = function() {
   try {
     const data = {
@@ -116,13 +112,13 @@ global.savePremiumData = function() {
       premiumBots: global.premiumBots,
       timestamp: new Date().toISOString()
     }
+    if (!fs.existsSync('./lib')) fs.mkdirSync('./lib', { recursive: true })
     fs.writeFileSync('./lib/premium-data.json', JSON.stringify(data, null, 2))
   } catch (e) {
-    console.error('Error guardando datos premium:', e)
+    console.error('Error guardando premium:', e)
   }
 }
 
-// Cargar datos premium si existen
 try {
   if (fs.existsSync('./lib/premium-data.json')) {
     const premiumData = JSON.parse(fs.readFileSync('./lib/premium-data.json', 'utf8'))
@@ -130,24 +126,7 @@ try {
     global.premiumBots = premiumData.premiumBots || {}
   }
 } catch (e) {
-  console.error('Error cargando datos premium:', e)
-}
-
-// Función para verificar usuario premium
-global.isPremiumUser = function(sender) {
-  const phone = sender.replace(/\D/g, '')
-  return global.premiumUsers.includes(phone) || 
-         global.owner.map(v => v.replace(/\D/g, '')).includes(phone)
-}
-
-// Función para obtener configuración de bot premium
-global.getPremiumBotConfig = function(botPhone) {
-  return global.premiumBots[botPhone] || {
-    ...global.defaultConfig,
-    owner: botPhone,
-    created: new Date().toISOString(),
-    isPremium: true
-  }
+  console.error('Error cargando premium:', e)
 }
 
 //*─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─⭒─ׄ─ׅ─ׄ─*
