@@ -5,6 +5,7 @@ import {
   makeWASocket,
   Browsers
 } from "@whiskeysockets/baileys"
+import { fileURLToPath } from 'url'
 import path from 'path'
 import fs from 'fs'
 import pino from 'pino'
@@ -12,227 +13,203 @@ import chalk from 'chalk'
 import qrcode from 'qrcode'
 import NodeCache from 'node-cache'
 
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
 // Función para crear bot premium
 export async function createPremiumBot(ownerPhone, botPhone, label = 'Bot Premium') {
-  const ownerDigits = ownerPhone.replace(/\D/g, '')
-  const botDigits = botPhone.replace(/\D/g, '')
-  
-  // Verificar que el owner sea premium
-  if (!global.premiumUsers.includes(ownerDigits) && 
-      !global.owner.map(v => v.replace(/\D/g, '')).includes(ownerDigits)) {
-    throw new Error('El propietario no es usuario premium')
-  }
-  
-  // Verificar límite de bots
-  const userBots = Object.values(global.premiumBots).filter(bot => 
-    bot.owner === ownerDigits
-  ).length
-  
-  if (userBots >= global.premiumFeatures.maxSubBots) {
-    throw new Error(`Límite de bots alcanzado (${global.premiumFeatures.maxSubBots})`)
-  }
-  
-  // Crear directorio de sesión
-  const sessionPath = path.join(process.cwd(), 'Sessions', 'Premium', ownerDigits, botDigits)
-  if (!fs.existsSync(sessionPath)) {
-    fs.mkdirSync(sessionPath, { recursive: true })
-  }
-  
-  // Configuración inicial del bot
-  const botConfig = {
-    owner: ownerDigits,
-    phone: botDigits,
-    label: label,
-    sessionPath: sessionPath,
-    created: new Date().toISOString(),
-    status: 'offline',
-    config: {
-      ...global.defaultConfig,
-      name: label,
-      ownerNumber: ownerDigits,
-      isPremium: true,
-      version: global.vs
-    },
-    stats: {
-      messages: 0,
-      groups: 0,
-      users: 0,
-      uptime: 0
+  try {
+    const ownerDigits = ownerPhone.replace(/\D/g, '')
+    const botDigits = botPhone.replace(/\D/g, '')
+    
+    // Verificar que el owner sea premium
+    if (!global.premiumUsers || !global.premiumUsers.includes(ownerDigits)) {
+      if (!global.owner || !global.owner.map(v => v.replace(/\D/g, '')).includes(ownerDigits)) {
+        throw new Error('El propietario no es usuario premium')
+      }
     }
+    
+    // Verificar límite de bots
+    if (global.premiumBots) {
+      const userBots = Object.values(global.premiumBots).filter(bot => 
+        bot.owner === ownerDigits
+      ).length
+      
+      const maxBots = global.premiumFeatures?.maxSubBots || 5
+      if (userBots >= maxBots) {
+        throw new Error(`Límite de bots alcanzado (${maxBots})`)
+      }
+    }
+    
+    // Crear directorio de sesión
+    const sessionPath = path.join(process.cwd(), 'Sessions', 'Premium', ownerDigits, botDigits)
+    if (!fs.existsSync(sessionPath)) {
+      fs.mkdirSync(sessionPath, { recursive: true })
+    }
+    
+    // Configuración inicial del bot
+    const botConfig = {
+      owner: ownerDigits,
+      phone: botDigits,
+      label: label,
+      sessionPath: sessionPath,
+      created: new Date().toISOString(),
+      status: 'offline',
+      config: {
+        ...(global.defaultConfig || {
+          banner: "https://cdn.sockywa.xyz/files/JmRs.jpeg",
+          icon: "https://cdn.sockywa.xyz/files/RTnq.jpeg",
+          name: "Bot Premium",
+          prefix: ".",
+          status: "✨ Usando Asta Bot Premium"
+        }),
+        name: label,
+        ownerNumber: ownerDigits,
+        isPremium: true,
+        version: global.vs || "1.0"
+      },
+      stats: {
+        messages: 0,
+        groups: 0,
+        users: 0,
+        uptime: 0
+      }
+    }
+    
+    // Inicializar si no existe
+    if (!global.premiumBots) global.premiumBots = {}
+    
+    // Guardar configuración
+    global.premiumBots[botDigits] = botConfig
+    
+    // Guardar en archivo
+    if (typeof global.savePremiumData === 'function') {
+      global.savePremiumData()
+    }
+    
+    console.log(chalk.green(`✅ Bot premium creado: +${botDigits} para +${ownerDigits}`))
+    return botConfig
+    
+  } catch (error) {
+    console.error('Error en createPremiumBot:', error)
+    throw error
   }
-  
-  // Guardar configuración
-  global.premiumBots[botDigits] = botConfig
-  global.savePremiumData()
-  
-  return botConfig
 }
 
 // Función para iniciar bot premium
 export async function startPremiumBot(botPhone) {
-  const botDigits = botPhone.replace(/\D/g, '')
-  const botConfig = global.premiumBots[botDigits]
-  
-  if (!botConfig) {
-    throw new Error('Bot no encontrado')
-  }
-  
-  const { state, saveCreds } = await useMultiFileAuthState(botConfig.sessionPath)
-  const { version } = await fetchLatestBaileysVersion()
-  
-  const msgRetryCache = new NodeCache()
-  
-  const connectionOptions = {
-    logger: pino({ level: 'silent' }),
-    printQRInTerminal: false,
-    auth: {
-      creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
-    },
-    browser: Browsers.macOS('Safari'),
-    version: version,
-    generateHighQualityLinkPreview: true,
-    msgRetryCounterCache: msgRetryCache,
-    syncFullHistory: false,
-    markOnlineOnConnect: true
-  }
-  
-  const sock = makeWASocket(connectionOptions)
-  sock.botConfig = botConfig
-  
-  // Eventos de conexión
-  sock.ev.on('creds.update', saveCreds)
-  
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr } = update
+  try {
+    const botDigits = botPhone.replace(/\D/g, '')
     
-    if (qr) {
-      // Generar QR para panel web
-      try {
-        const qrBuffer = await qrcode.toBuffer(qr, { scale: 10 })
-        const qrPath = path.join(botConfig.sessionPath, 'qr.png')
-        fs.writeFileSync(qrPath, qrBuffer)
+    if (!global.premiumBots || !global.premiumBots[botDigits]) {
+      throw new Error('Bot no encontrado en la base de datos')
+    }
+    
+    const botConfig = global.premiumBots[botDigits]
+    
+    const { state, saveCreds } = await useMultiFileAuthState(botConfig.sessionPath)
+    const { version } = await fetchLatestBaileysVersion()
+    
+    const msgRetryCache = new NodeCache()
+    
+    const connectionOptions = {
+      logger: pino({ level: 'silent' }),
+      printQRInTerminal: false,
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
+      },
+      browser: Browsers.macOS('Safari'),
+      version: version,
+      generateHighQualityLinkPreview: true,
+      msgRetryCounterCache: msgRetryCache,
+      syncFullHistory: false,
+      markOnlineOnConnect: true
+    }
+    
+    const sock = makeWASocket(connectionOptions)
+    sock.botConfig = botConfig
+    
+    // Eventos de conexión
+    sock.ev.on('creds.update', saveCreds)
+    
+    sock.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect, qr } = update
+      
+      if (qr) {
+        // Generar QR para panel web
+        try {
+          const qrBuffer = await qrcode.toBuffer(qr, { scale: 10 })
+          const qrPath = path.join(botConfig.sessionPath, 'qr.png')
+          fs.writeFileSync(qrPath, qrBuffer)
+          
+          // Actualizar estado
+          botConfig.status = 'waiting_qr'
+          if (typeof global.savePremiumData === 'function') {
+            global.savePremiumData()
+          }
+        } catch (e) {
+          console.error('Error generando QR:', e)
+        }
+      }
+      
+      if (connection === 'open') {
+        console.log(chalk.green(`✨ BOT PREMIUM CONECTADO: +${botDigits}`))
         
-        // Actualizar estado
-        botConfig.status = 'waiting_qr'
-        global.savePremiumData()
-      } catch (e) {
-        console.error('Error generando QR:', e)
+        // Actualizar configuración
+        botConfig.status = 'online'
+        botConfig.connectedAt = new Date().toISOString()
+        
+        // Agregar a conexiones activas
+        if (!global.premiumConns) global.premiumConns = []
+        if (!global.premiumConns.includes(sock)) {
+          global.premiumConns.push(sock)
+        }
+        
+        // Guardar cambios
+        if (typeof global.savePremiumData === 'function') {
+          global.savePremiumData()
+        }
       }
-    }
+      
+      if (connection === 'close') {
+        botConfig.status = 'offline'
+        if (typeof global.savePremiumData === 'function') {
+          global.savePremiumData()
+        }
+        
+        // Auto-reconexión para premium
+        if (global.premiumFeatures?.autoRestart) {
+          setTimeout(() => {
+            console.log(chalk.yellow(`🔄 Reconectando bot premium +${botDigits}...`))
+            startPremiumBot(botDigits).catch(console.error)
+          }, 5000)
+        }
+      }
+    })
     
-    if (connection === 'open') {
-      console.log(chalk.green(`✨ BOT PREMIUM CONECTADO: +${botDigits}`))
-      
-      // Actualizar configuración
-      botConfig.status = 'online'
-      botConfig.connectedAt = new Date().toISOString()
-      botConfig.config.name = sock.user?.name || botConfig.config.name
-      
-      // Agregar a conexiones activas
-      if (!global.premiumConns.includes(sock)) {
-        global.premiumConns.push(sock)
-      }
-      
-      // Configurar auto-reconexión
-      if (global.premiumFeatures.autoRestart) {
-        setupAutoReconnect(sock, botDigits)
-      }
-      
-      global.savePremiumData()
-    }
+    return sock
     
-    if (connection === 'close') {
-      botConfig.status = 'offline'
-      global.savePremiumData()
-      
-      // Auto-reconexión para premium
-      if (global.premiumFeatures.autoRestart) {
-        setTimeout(() => {
-          console.log(chalk.yellow(`🔄 Reconectando bot premium +${botDigits}...`))
-          startPremiumBot(botDigits).catch(console.error)
-        }, 5000)
-      }
-    }
-  })
-  
-  // Manejar mensajes
-  sock.ev.on('messages.upsert', async (m) => {
-    if (botConfig.stats) {
-      botConfig.stats.messages++
-    }
-  })
-  
-  return sock
-}
-
-// Configurar auto-reconexión
-function setupAutoReconnect(sock, botDigits) {
-  setInterval(() => {
-    if (!sock.user?.id) {
-      console.log(chalk.yellow(`🔄 Reintentando conexión para +${botDigits}...`))
-      startPremiumBot(botDigits).catch(console.error)
-    }
-  }, 300000)
-}
-
-// Función para editar configuración de bot
-export function editPremiumBotConfig(botPhone, newConfig) {
-  const botDigits = botPhone.replace(/\D/g, '')
-  const botConfig = global.premiumBots[botDigits]
-  
-  if (!botConfig) {
-    throw new Error('Bot no encontrado')
+  } catch (error) {
+    console.error('Error en startPremiumBot:', error)
+    throw error
   }
-  
-  // Actualizar configuración
-  botConfig.config = {
-    ...botConfig.config,
-    ...newConfig,
-    updated: new Date().toISOString()
-  }
-  
-  global.savePremiumData()
-  return botConfig
 }
 
 // Función para obtener bots de un usuario
 export function getUserPremiumBots(ownerPhone) {
-  const ownerDigits = ownerPhone.replace(/\D/g, '')
-  return Object.values(global.premiumBots).filter(bot => 
-    bot.owner === ownerDigits
-  )
-}
-
-// Función para eliminar bot premium
-export async function deletePremiumBot(botPhone) {
-  const botDigits = botPhone.replace(/\D/g, '')
-  const botConfig = global.premiumBots[botDigits]
-  
-  if (!botConfig) {
-    throw new Error('Bot no encontrado')
+  try {
+    const ownerDigits = ownerPhone.replace(/\D/g, '')
+    
+    if (!global.premiumBots) {
+      return []
+    }
+    
+    return Object.values(global.premiumBots).filter(bot => 
+      bot.owner === ownerDigits
+    )
+  } catch (error) {
+    console.error('Error en getUserPremiumBots:', error)
+    return []
   }
-  
-  // Cerrar conexión si está activa
-  const connIndex = global.premiumConns.findIndex(conn => 
-    conn.botConfig?.phone === botDigits
-  )
-  
-  if (connIndex !== -1) {
-    try {
-      global.premiumConns[connIndex].ws.close()
-    } catch (e) {}
-    global.premiumConns.splice(connIndex, 1)
-  }
-  
-  // Eliminar sesión
-  if (fs.existsSync(botConfig.sessionPath)) {
-    fs.rmSync(botConfig.sessionPath, { recursive: true, force: true })
-  }
-  
-  // Eliminar de la base de datos
-  delete global.premiumBots[botDigits]
-  global.savePremiumData()
-  
-  return true
 }
