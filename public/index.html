@@ -4,92 +4,143 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Asta Bot - Panel Premium</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root {
-            --primary: #FF2E63;
-            --secondary: #7D5FFF;
-            --dark: #1A1B26;
-            --darker: #12121C;
-            --light: #252836;
-            --text: #E4E7EC;
-        }
-        
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        
         body {
-            background: linear-gradient(135deg, var(--darker) 0%, var(--dark) 100%);
-            color: var(--text);
-            min-height: 100vh;
+            background: linear-gradient(135deg, #12121C 0%, #1A1B26 100%);
+            color: #E4E7EC;
             font-family: 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            padding: 20px;
         }
-        
-        .premium-badge {
-            background: linear-gradient(45deg, #FFD700, #FFA500);
-            color: #000;
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-weight: bold;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
-        
-        .glass-card {
-            background: rgba(26, 27, 38, 0.7);
+        .container { max-width: 800px; margin: 0 auto; }
+        .card {
+            background: rgba(37, 40, 54, 0.7);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 15px;
             padding: 20px;
             margin: 20px 0;
         }
-        
-        .bot-card {
-            transition: transform 0.3s;
+        h1 { color: #FF2E63; margin-bottom: 10px; }
+        .btn {
+            background: linear-gradient(45deg, #FF2E63, #7D5FFF);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 10px;
             cursor: pointer;
+            font-weight: bold;
+            margin: 10px 5px;
         }
-        
-        .bot-card:hover {
-            transform: translateY(-5px);
-            border-color: var(--primary);
+        input {
+            background: rgba(26, 27, 38, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            padding: 12px;
+            border-radius: 10px;
+            width: 100%;
+            margin: 10px 0;
         }
-        
-        .online { color: #4CAF50; }
-        .offline { color: #FF5252; }
-        .connecting { color: #FFC107; }
     </style>
 </head>
 <body>
     <div class="container">
-        <header class="glass-card">
-            <h1><i class="fas fa-crown"></i> Panel Premium Asta Bot</h1>
+        <div class="card">
+            <h1>🔐 Panel Premium Asta Bot</h1>
+            <p>Acceso exclusivo para usuarios premium</p>
+        </div>
+        
+        <div class="card">
+            <h2>📱 Verificar Usuario Premium</h2>
+            <input type="tel" id="phone-input" placeholder="Tu número con código país">
+            <button class="btn" onclick="verifyUser()">Verificar</button>
             <div id="user-info"></div>
-        </header>
-        
-        <div class="glass-card">
-            <h2><i class="fas fa-robot"></i> Crear Nuevo Bot</h2>
-            <form id="create-bot-form">
-                <input type="tel" id="bot-phone" placeholder="Número del bot (con código país)" required>
-                <input type="text" id="bot-label" placeholder="Nombre del bot" required>
-                <button type="submit" class="btn-premium">
-                    <i class="fas fa-plus"></i> Crear Bot Premium
-                </button>
-            </form>
         </div>
         
-        <div class="glass-card">
-            <h2><i class="fas fa-list"></i> Mis Bots Premium</h2>
+        <div class="card" id="premium-panel" style="display: none;">
+            <h2>🤖 Mis Bots Premium</h2>
             <div id="bots-list"></div>
-        </div>
-        
-        <div id="bot-editor" class="glass-card" style="display: none;">
-            <h2><i class="fas fa-edit"></i> Editor de Bot</h2>
-            <form id="edit-bot-form">
-                <!-- Campos de edición aquí -->
-            </form>
+            <button class="btn" onclick="createBot()">➕ Crear Nuevo Bot</button>
         </div>
     </div>
     
-    <script src="/js/panel.js"></script>
+    <script>
+        let currentUser = null;
+        
+        async function verifyUser() {
+            const phone = document.getElementById('phone-input').value;
+            if (!phone) return alert('Ingresa tu número');
+            
+            try {
+                const response = await fetch('/api/verify-premium', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentUser = data.phone;
+                    document.getElementById('user-info').innerHTML = `
+                        <div style="background: linear-gradient(45deg, #FFD700, #FFA500); 
+                                    color: black; padding: 10px; border-radius: 10px; margin: 10px 0;">
+                            <strong>✅ USUARIO PREMIUM</strong><br>
+                            Número: +${data.phone}<br>
+                            Bots disponibles: ${data.maxBots}
+                        </div>
+                    `;
+                    document.getElementById('premium-panel').style.display = 'block';
+                    loadUserBots();
+                } else {
+                    alert('No eres usuario premium. Contacta al propietario.');
+                }
+            } catch (error) {
+                alert('Error de conexión');
+            }
+        }
+        
+        async function loadUserBots() {
+            if (!currentUser) return;
+            
+            try {
+                const response = await fetch('/api/user-bots', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ownerPhone: currentUser })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const list = document.getElementById('bots-list');
+                    if (data.bots.length === 0) {
+                        list.innerHTML = '<p>No tienes bots creados aún.</p>';
+                    } else {
+                        list.innerHTML = data.bots.map(bot => `
+                            <div style="background: rgba(26,27,38,0.5); padding: 15px; border-radius: 10px; margin: 10px 0;">
+                                <strong>${bot.label}</strong><br>
+                                Número: +${bot.phone}<br>
+                                Estado: ${bot.status}<br>
+                                Creado: ${new Date(bot.created).toLocaleDateString()}
+                            </div>
+                        `).join('');
+                    }
+                }
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+        
+        function createBot() {
+            const botPhone = prompt('Número para el nuevo bot (con código país):');
+            const botName = prompt('Nombre del bot:');
+            
+            if (botPhone && botName) {
+                alert(`Bot "${botName}" será creado con el número ${botPhone}\nUsa el comando /crearbot en WhatsApp para completar.`);
+            }
+        }
+    </script>
 </body>
 </html>
