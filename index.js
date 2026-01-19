@@ -396,3 +396,41 @@ async function isValidPhoneNumber(number) {
     return false
   }
 }
+
+//comiensa sistema de web
+
+// Iniciar servidor web premium
+import('./web.js').catch(e => {
+  console.log(chalk.yellow('⚠ No se pudo iniciar servidor web:', e.message))
+})
+
+// Iniciar bots premium al arrancar
+async function startAllPremiumBots() {
+  if (!global.premiumBots) return;
+  
+  console.log(chalk.cyan('\n🔧 Iniciando bots premium...'))
+  
+  for (const botPhone in global.premiumBots) {
+    try {
+      const botConfig = global.premiumBots[botPhone]
+      if (botConfig && (botConfig.status === 'online' || botConfig.status === 'waiting_qr')) {
+        console.log(chalk.yellow(`🔄 Reiniciando bot premium: +${botPhone}`))
+        const { startPremiumBot } = await import('./plugins/sockets/premium.js').catch(() => ({}))
+        if (startPremiumBot) {
+          await startPremiumBot(botPhone).catch(e => {
+            console.log(chalk.red(`❌ Error reiniciando +${botPhone}:`, e.message))
+          })
+        }
+      }
+    } catch (e) {
+      console.log(chalk.red(`❌ Error con bot +${botPhone}:`, e.message))
+    }
+  }
+  
+  console.log(chalk.green(`✅ ${Object.keys(global.premiumBots || {}).length} bots premium listos`))
+}
+
+// Esperar a que todo cargue
+setTimeout(() => {
+  startAllPremiumBots()
+}, 8000)
