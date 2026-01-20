@@ -1,4 +1,4 @@
-// plugins/setwelcome.js
+// plugins/group/setwelcome.js
 import { generateWAMessageFromContent } from '@whiskeysockets/baileys'
 import fs from 'fs'
 import path from 'path'
@@ -25,29 +25,9 @@ let handler = async (m, { conn, usedPrefix, command, text, participants, groupMe
             current: chat.sWelcome || '🎉 ¡Bienvenido/a al grupo!'
         },
         'bye': {
-            name: 'despedida',
+            name: 'despedida', 
             desc: 'Configurar mensaje de despedida',
             current: chat.sBye || '👋 ¡Hasta luego!'
-        },
-        'view': {
-            name: 'ver',
-            desc: 'Ver configuración actual',
-            current: null
-        },
-        'on': {
-            name: 'activar',
-            desc: 'Activar sistema de bienvenida/despedida',
-            current: chat.welcome || false
-        },
-        'off': {
-            name: 'desactivar',
-            desc: 'Desactivar sistema',
-            current: chat.welcome || false
-        },
-        'reset': {
-            name: 'reiniciar',
-            desc: 'Restaurar configuración por defecto',
-            current: null
         }
     }
     
@@ -71,31 +51,26 @@ let handler = async (m, { conn, usedPrefix, command, text, participants, groupMe
                 nativeFlowMessage: {
                     buttons: [
                         {
-                            name: 'cta_url',
+                            name: 'cta_copy',
                             buttonParamsJson: JSON.stringify({
                                 display_text: '📝 Configurar Bienvenida',
-                                id: 'set_welcome'
+                                id: 'set_welcome',
+                                copy_code: `${usedPrefix}${command} welcome `
                             })
                         },
                         {
-                            name: 'cta_url',
+                            name: 'cta_copy', 
                             buttonParamsJson: JSON.stringify({
                                 display_text: '👋 Configurar Despedida',
-                                id: 'set_bye'
-                            })
-                        },
-                        {
-                            name: 'cta_url',
-                            buttonParamsJson: JSON.stringify({
-                                display_text: '👁️ Ver Configuración',
-                                id: 'view_config'
+                                id: 'set_bye',
+                                copy_code: `${usedPrefix}${command} bye `
                             })
                         },
                         {
                             name: 'cta_copy',
                             buttonParamsJson: JSON.stringify({
-                                display_text: '📋 Copiar Sintaxis',
-                                id: 'copy_syntax',
+                                display_text: '📋 Sintaxis Disponible',
+                                id: 'show_syntax',
                                 copy_code: getSyntaxGuide()
                             })
                         }
@@ -118,7 +93,7 @@ let handler = async (m, { conn, usedPrefix, command, text, participants, groupMe
         case 'bienvenida':
             if (!content) {
                 const current = chat.sWelcome || '🎉 ¡Bienvenido/a al grupo!'
-                return m.reply(`*Configuración actual de Bienvenida:*\n\n${current}\n\nPara cambiar:\n${usedPrefix}${command} welcome <mensaje>`)
+                return m.reply(`*Configuración actual de Bienvenida:*\n\n${current}\n\nPara cambiar:\n${usedPrefix}${command} welcome <mensaje>\n\nEjemplo:\n${usedPrefix}${command} welcome ¡Hola @user! Bienvenido a @subject`)
             }
             
             if (content.length > 1000) {
@@ -260,8 +235,8 @@ function formatMessage(message, user, group, type = 'welcome') {
         '@number': user.id.split('@')[0] || '',
         '@subject': group.subject || 'Grupo',
         '@desc': group.desc || 'Sin descripción',
-        '@owner': group.owner || 'Desconocido',
-        '@creation': new Date(group.creation * 1000).toLocaleDateString('es-ES') || 'Desconocida',
+        '@owner': 'Administrador',
+        '@creation': 'Hoy',
         '@time': time,
         '@date': date,
         '@membercount': group.participants?.length || 0,
@@ -273,13 +248,9 @@ function formatMessage(message, user, group, type = 'welcome') {
     
     let formatted = message
     for (const [key, value] of Object.entries(replacements)) {
-        formatted = formatted.replace(new RegExp(key, 'gi'), value)
+        const regex = new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
+        formatted = formatted.replace(regex, value)
     }
-    
-    // Procesar condicionales simples
-    formatted = formatted.replace(/{if:(.*?):(.*?):(.*?)}/g, (match, condition, ifTrue, ifFalse) => {
-        return condition === 'welcome' && type === 'welcome' ? ifTrue : ifFalse
-    })
     
     return formatted
 }
@@ -287,127 +258,39 @@ function formatMessage(message, user, group, type = 'welcome') {
 // Guía completa de sintaxis
 function getSyntaxGuide() {
     return `
-🎨 *GUÍA DE SINTÁXIS PARA BIENVENIDAS/DESPEDIDAS*
+🎨 *VARIABLES DISPONIBLES PARA BIENVENIDAS/DESPEDIDAS:*
 
-*VARIABLES DISPONIBLES:*
-• *@user* → Nombre del usuario
-• *@number* → Número del usuario (sin @)
-• *@mention* → Mención del usuario (@número)
-• *@subject* → Nombre del grupo
-• *@groupname* → Nombre del grupo (alias)
-• *@desc* → Descripción del grupo
-• *@owner* → Dueño del grupo
-• *@creation* → Fecha de creación
-• *@membercount* → Total de miembros
-• *@time* → Hora actual
-• *@date* → Fecha actual
-• *@botname* → Nombre del bot
-• *@type* → Tipo (bienvenida/despedida)
+*Información del usuario:*
+• @user → Nombre del usuario
+• @number → Número del usuario
+• @mention → Mención (@número)
 
-*FORMATO ESPECIAL:*
-• *\\n* → Salto de línea
-• *\\t* → Tabulación
-• *{if:welcome:texto1:texto2}* → Muestra texto1 en bienvenidas, texto2 en despedidas
+*Información del grupo:*
+• @subject → Nombre del grupo
+• @groupname → Nombre del grupo
+• @desc → Descripción del grupo
+• @membercount → Total de miembros
 
-*EJEMPLOS AVANZADOS:*
+*Fecha y hora:*
+• @time → Hora actual (HH:MM)
+• @date → Fecha actual
 
-1. Bienvenida personalizada:
-🎊 *¡BIENVENIDO/A @user!* 🎊
-📱 Número: @number
-👥 Grupo: @subject
-📅 Fecha: @date
-⏰ Hora: @time
-👤 Miembros: @membercount
+*Otros:*
+• @botname → Nombre del bot
+• @type → "bienvenida" o "despedida"
 
-2. Despedida con mención:
-👋 *@user ha dejado el grupo*
-📱 Número: @number
-📅 Fecha: @date
-⏰ Hora: @time
-{@mention} ¡Esperamos verte pronto!
-
-3. Con condicional:
-{if:welcome:🎉 ¡BIENVENIDO!:👋 ¡HASTA PRONTO!}
-@user al grupo @subject
-Miembros actuales: @membercount
-
-*NOTAS:*
-• Las variables distinguen entre mayúsculas y minúsculas
-• Puedes combinar múltiples variables
-• Los mensajes pueden incluir emojis y formato
-• Límite: 1000 caracteres por mensaje
+*EJEMPLOS:*
+¡Hola @user! Bienvenido a @subject 👋
+@mention se unió al grupo @groupname 🎉
+@user ha salido de @subject 👋
+Bienvenido @user! Somos @membercount miembros 🤝
     `.trim()
 }
 
-// Handler para procesar bienvenidas reales
-export async function welcomeHandler(m, conn) {
-    const chat = global.db.data.chats[m.chat] || {}
-    
-    // Verificar si está activado
-    if (!chat.welcome) return
-    
-    // Determinar si es bienvenida o despedida
-    const action = m.action
-    const participants = m.participants || []
-    
-    for (const participant of participants) {
-        const user = global.db.data.users[participant] || {}
-        const userName = user.name || await conn.getName(participant).catch(() => 'Usuario')
-        
-        let message = ''
-        let type = ''
-        
-        if (action === 'add' || action === 'invite') {
-            // Bienvenida
-            type = 'welcome'
-            message = chat.sWelcome || '🎉 ¡Bienvenido/a al grupo!'
-            
-            // Intentar obtener foto de perfil
-            let profilePic
-            try {
-                profilePic = await conn.profilePictureUrl(participant, 'image').catch(() => null)
-            } catch {
-                profilePic = null
-            }
-            
-        } else if (action === 'remove' || action === 'leave') {
-            // Despedida
-            type = 'bye'
-            message = chat.sBye || '👋 ¡Hasta luego!'
-        } else {
-            continue
-        }
-        
-        // Formatear mensaje
-        const groupMetadata = await conn.groupMetadata(m.chat).catch(() => ({ subject: 'Grupo' }))
-        const formattedMessage = formatMessage(message, { id: participant, name: userName }, groupMetadata, type)
-        
-        // Enviar mensaje
-        try {
-            if (type === 'welcome') {
-                // Enviar con imagen si está disponible
-                const welcomeMsg = {
-                    text: formattedMessage,
-                    contextInfo: {
-                        mentionedJid: [participant]
-                    }
-                }
-                
-                await conn.sendMessage(m.chat, welcomeMsg)
-                
-            } else {
-                // Despedida simple
-                await conn.sendMessage(m.chat, { 
-                    text: formattedMessage,
-                    contextInfo: {
-                        mentionedJid: [participant]
-                    }
-                })
-            }
-        } catch (error) {
-            console.error('Error enviando mensaje de bienvenida/despedida:', error)
-        }
-    }
+// Exportar funciones para el handler de eventos
+export const welcomeFunctions = {
+    formatMessage,
+    getSyntaxGuide
 }
 
 handler.help = ['setwelcome']
