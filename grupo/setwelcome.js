@@ -1,303 +1,303 @@
-// plugins/group/setwelcome.js
-import { generateWAMessageFromContent } from '@whiskeysockets/baileys'
-import fs from 'fs'
-import path from 'path'
+/**
+ * 🎉 SISTEMA DE BIENVENIDAS/DESPEDIDAS
+ * Configura mensajes personalizados para nuevos miembros
+ * Basado en AstaBot - Creado por Fernando
+ * GitHub: https://github.com/Fer280809/Asta_bot
+ */
 
-let handler = async (m, { conn, usedPrefix, command, text, participants, groupMetadata }) => {
-    const isOwner = [...global.owner.map(v => v.replace(/\D/g, "") + "@s.whatsapp.net")].includes(m.sender)
-    const user = global.db.data.users[m.sender]
-    const chat = global.db.data.chats[m.chat] = global.db.data.chats[m.chat] || {}
+let handler = async (m, { 
+  conn, 
+  usedPrefix, 
+  command, 
+  text, 
+  args,
+  participants,
+  isAdmin,
+  isOwner,
+  botname,
+  vs
+}) => {
+  try {
+    // 🔹 INFORMACIÓN DEL COMANDO
+    const comandoInfo = {
+      nombre: 'setwelcome',
+      version: '2.0',
+      autor: 'Fernando',
+      descripcion: 'Configurar mensajes de bienvenida y despedida del grupo',
+      uso: `${usedPrefix}${command} [welcome/bye/on/off/view/reset]`
+    }
+
+    // 🔹 DATOS DEL USUARIO
+    const usuario = {
+      id: m.sender,
+      nombre: m.pushName || 'Usuario',
+      tag: `@${m.sender.split('@')[0]}`,
+      esAdmin: isAdmin,
+      esOwner: isOwner
+    }
+
+    // 🔹 DATOS DEL CHAT
+    const chat = {
+      esGrupo: m.isGroup,
+      nombre: m.isGroup ? await conn.getName(m.chat) || 'Grupo' : 'Privado',
+      id: m.chat
+    }
+
+    // 🔹 VALIDACIONES INICIALES
+    if (!chat.esGrupo) {
+      return conn.reply(m.chat, '❌ Este comando solo funciona en grupos.', m)
+    }
+
+    // Obtener datos del chat desde la base de datos
+    const chatData = global.db.data.chats[m.chat] = global.db.data.chats[m.chat] || {}
     
     // Verificar permisos
-    if (!m.isGroup) return m.reply('❌ Este comando solo funciona en grupos.')
-    
-    let groupMetadataActual = groupMetadata || await conn.groupMetadata(m.chat).catch(() => null)
-    if (!groupMetadataActual) return m.reply('❌ No se pudo obtener información del grupo.')
-    
-    const participant = groupMetadataActual.participants.find(p => p.id === m.sender)
-    if (!participant?.admin && !isOwner) return m.reply('❌ Solo los administradores pueden configurar la bienvenida/despedida.')
-    
-    // Subcomandos disponibles
-    const subcommands = {
-        'welcome': {
-            name: 'bienvenida',
-            desc: 'Configurar mensaje de bienvenida',
-            current: chat.sWelcome || '🎉 ¡Bienvenido/a al grupo!'
-        },
-        'bye': {
-            name: 'despedida', 
-            desc: 'Configurar mensaje de despedida',
-            current: chat.sBye || '👋 ¡Hasta luego!'
-        }
+    if (!usuario.esAdmin && !usuario.esOwner) {
+      return conn.reply(m.chat, '❌ Solo administradores pueden configurar las bienvenidas.', m)
     }
+
+    // 🔹 PROCESAR ARGUMENTOS
+    const parametros = text.trim()
+    const [subcomando, ...resto] = args
+    const contenido = resto.join(' ')
     
-    // Si no hay texto, mostrar menú
-    if (!text) {
-        const welcomeStatus = chat.welcome ? '✅ Activado' : '❌ Desactivado'
-        const welcomeMsg = chat.sWelcome ? `📝 Configurada (${chat.sWelcome.length} chars)` : '⚙️ Por defecto'
-        const byeMsg = chat.sBye ? `📝 Configurada (${chat.sBye.length} chars)` : '⚙️ Por defecto'
-        
-        const menuMessage = {
-            interactiveMessage: {
-                header: {
-                    title: '🎉 CONFIGURAR BIENVENIDAS'
-                },
-                body: {
-                    text: `*Estado:* ${welcomeStatus}\n*Bienvenida:* ${welcomeMsg}\n*Despedida:* ${byeMsg}\n\nSelecciona una opción:`
-                },
-                footer: {
-                    text: `${global.botname} • Gestión de Grupo`
-                },
-                nativeFlowMessage: {
-                    buttons: [
-                        {
-                            name: 'cta_copy',
-                            buttonParamsJson: JSON.stringify({
-                                display_text: '📝 Configurar Bienvenida',
-                                id: 'set_welcome',
-                                copy_code: `${usedPrefix}${command} welcome `
-                            })
-                        },
-                        {
-                            name: 'cta_copy', 
-                            buttonParamsJson: JSON.stringify({
-                                display_text: '👋 Configurar Despedida',
-                                id: 'set_bye',
-                                copy_code: `${usedPrefix}${command} bye `
-                            })
-                        },
-                        {
-                            name: 'cta_copy',
-                            buttonParamsJson: JSON.stringify({
-                                display_text: '📋 Sintaxis Disponible',
-                                id: 'show_syntax',
-                                copy_code: getSyntaxGuide()
-                            })
-                        }
-                    ]
-                }
-            }
+    // Reacción de espera
+    await m.react('⏳')
+
+    // 🛠️ CÓDIGO PRINCIPAL
+    if (!subcomando) {
+      // Mostrar panel de configuración
+      const estado = chatData.welcome ? '🟢 ACTIVADO' : '🔴 DESACTIVADO'
+      const bienvenida = chatData.sWelcome || '🎉 ¡Bienvenido/a al grupo!'
+      const despedida = chatData.sBye || '👋 ¡Hasta luego!'
+      
+      const panel = `
+╭━━〔🎉 CONFIGURACIÓN DE BIENVENIDAS 〕━━╮
+┃
+┃ 📊 *Estado:* ${estado}
+┃ 👥 *Grupo:* ${chat.nombre}
+┃ 👤 *Configurando:* ${usuario.tag}
+┃
+┃ 📝 *Mensaje de Bienvenida:*
+┃ ${bienvenida.substring(0, 100)}${bienvenida.length > 100 ? '...' : ''}
+┃
+┃ 📝 *Mensaje de Despedida:*
+┃ ${despedida.substring(0, 100)}${despedida.length > 100 ? '...' : ''}
+┃
+┃ 🔧 *Comandos disponibles:*
+┃ → ${usedPrefix}${command} welcome <mensaje>
+┃ → ${usedPrefix}${command} bye <mensaje>
+┃ → ${usedPrefix}${command} on/off
+┃ → ${usedPrefix}${command} view
+┃ → ${usedPrefix}${command} reset
+┃ → ${usedPrefix}${command} test
+┃ → ${usedPrefix}${command} syntax
+┃
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+      `.trim()
+      
+      await conn.reply(m.chat, panel, m)
+      await m.react('✅')
+      return
+    }
+
+    // Manejar subcomandos
+    switch (subcomando.toLowerCase()) {
+      case 'welcome':
+      case 'bienvenida':
+        if (!contenido) {
+          const actual = chatData.sWelcome || '🎉 ¡Bienvenido/a al grupo!'
+          return conn.reply(m.chat, 
+            `📝 *Mensaje actual de bienvenida:*\n\n${actual}\n\n` +
+            `Para cambiar:\n${usedPrefix}${command} welcome <mensaje>\n\n` +
+            `Ejemplo:\n${usedPrefix}${command} welcome ¡Hola @user! Bienvenido a @subject`, m)
         }
         
-        await conn.sendMessage(m.chat, menuMessage, { quoted: m })
-        return
+        if (contenido.length > 1000) {
+          return conn.reply(m.chat, '❌ El mensaje no puede exceder 1000 caracteres.', m)
+        }
+        
+        chatData.sWelcome = contenido
+        await conn.reply(m.chat, `✅ *Bienvenida configurada correctamente*\n\n📝 Nuevo mensaje:\n${contenido}`, m)
+        break
+        
+      case 'bye':
+      case 'despedida':
+      case 'adios':
+        if (!contenido) {
+          const actual = chatData.sBye || '👋 ¡Hasta luego!'
+          return conn.reply(m.chat, 
+            `📝 *Mensaje actual de despedida:*\n\n${actual}\n\n` +
+            `Para cambiar:\n${usedPrefix}${command} bye <mensaje>`, m)
+        }
+        
+        if (contenido.length > 1000) {
+          return conn.reply(m.chat, '❌ El mensaje no puede exceder 1000 caracteres.', m)
+        }
+        
+        chatData.sBye = contenido
+        await conn.reply(m.chat, `✅ *Despedida configurada correctamente*\n\n📝 Nuevo mensaje:\n${contenido}`, m)
+        break
+        
+      case 'on':
+      case 'activar':
+        chatData.welcome = true
+        await conn.reply(m.chat, '✅ *Sistema de bienvenidas ACTIVADO*', m)
+        break
+        
+      case 'off':
+      case 'desactivar':
+        chatData.welcome = false
+        await conn.reply(m.chat, '✅ *Sistema de bienvenidas DESACTIVADO*', m)
+        break
+        
+      case 'view':
+      case 'ver':
+        const status = chatData.welcome ? '🟢 ACTIVADO' : '🔴 DESACTIVADO'
+        const welcomeMsg = chatData.sWelcome || '🎉 ¡Bienvenido/a al grupo!'
+        const byeMsg = chatData.sBye || '👋 ¡Hasta luego!'
+        
+        const vista = `
+╭━━〔👁️ VISTA DE CONFIGURACIÓN 〕━━╮
+┃
+┃ 📊 *Estado:* ${status}
+┃ 👥 *Grupo:* ${chat.nombre}
+┃
+┃ 🎉 *Mensaje de Bienvenida:*
+┃ ${welcomeMsg}
+┃
+┃ 👋 *Mensaje de Despedida:*
+┃ ${byeMsg}
+┃
+┃ 📈 *Estadísticas:*
+┃ • Bienvenida: ${welcomeMsg.length} caracteres
+┃ • Despedida: ${byeMsg.length} caracteres
+┃
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+        `.trim()
+        
+        await conn.reply(m.chat, vista, m)
+        break
+        
+      case 'reset':
+      case 'reiniciar':
+        delete chatData.sWelcome
+        delete chatData.sBye
+        chatData.welcome = true
+        await conn.reply(m.chat, '✅ *Configuración restaurada a valores por defecto*', m)
+        break
+        
+      case 'test':
+      case 'probar':
+        const testUser = {
+          id: m.sender,
+          name: usuario.nombre
+        }
+        
+        const testWelcome = chatData.sWelcome || '🎉 ¡Bienvenido/a al grupo!'
+        const formatted = formatMessage(testWelcome, testUser, { subject: chat.nombre }, 'welcome')
+        
+        await conn.reply(m.chat, `🧪 *PRUEBA DE BIENVENIDA*\n\n${formatted}`, m)
+        break
+        
+      case 'syntax':
+      case 'sintaxis':
+        const guia = `
+╭━━〔📘 GUÍA DE SINTAXIS 〕━━╮
+┃
+┃ 🔤 *VARIABLES DISPONIBLES:*
+┃ • @user → Nombre del usuario
+┃ • @number → Número del usuario
+┃ • @mention → Mención (@número)
+┃ • @subject → Nombre del grupo
+┃ • @desc → Descripción del grupo
+┃ • @membercount → Total de miembros
+┃ • @time → Hora actual
+┃ • @date → Fecha actual
+┃ • @botname → Nombre del bot
+┃
+┃ 📝 *EJEMPLOS:*
+┃ → ¡Hola @user! Bienvenido a @subject 👋
+┃ → @mention se unió al grupo @groupname 🎉
+┃ → @user ha salido de @subject 👋
+┃ → Bienvenido @user! Somos @membercount miembros 🤝
+┃
+┃ ⚠️ *NOTAS:*
+┃ • Límite: 1000 caracteres por mensaje
+┃ • Usa \\n para saltos de línea
+┃ • Las variables distinguen mayúsculas/minúsculas
+┃
+╰━━━━━━━━━━━━━━━━━━━━━━━━━━╯
+        `.trim()
+        
+        await conn.reply(m.chat, guia, m)
+        break
+        
+      default:
+        return conn.reply(m.chat, 
+          `❌ Subcomando no reconocido.\n\n` +
+          `📋 *Uso correcto:*\n` +
+          `${usedPrefix}${command} [welcome/bye/on/off/view/reset/test/syntax]`, m)
     }
     
-    // Procesar subcomandos
-    const args = text.trim().split(' ')
-    const subcmd = args[0].toLowerCase()
-    const content = args.slice(1).join(' ')
+    await m.react('✅')
+
+  } catch (error) {
+    console.error(`❌ Error en ${command}:`, error)
+    await m.react('❌')
     
-    switch (subcmd) {
-        case 'welcome':
-        case 'bienvenida':
-            if (!content) {
-                const current = chat.sWelcome || '🎉 ¡Bienvenido/a al grupo!'
-                return m.reply(`*Configuración actual de Bienvenida:*\n\n${current}\n\nPara cambiar:\n${usedPrefix}${command} welcome <mensaje>\n\nEjemplo:\n${usedPrefix}${command} welcome ¡Hola @user! Bienvenido a @subject`)
-            }
-            
-            if (content.length > 1000) {
-                return m.reply('❌ El mensaje de bienvenida no puede exceder los 1000 caracteres.')
-            }
-            
-            chat.sWelcome = content
-            await m.reply(`✅ *Bienvenida configurada correctamente*\n\n📝 Nuevo mensaje:\n${content}`)
-            break
-            
-        case 'bye':
-        case 'despedida':
-        case 'adios':
-            if (!content) {
-                const current = chat.sBye || '👋 ¡Hasta luego!'
-                return m.reply(`*Configuración actual de Despedida:*\n\n${current}\n\nPara cambiar:\n${usedPrefix}${command} bye <mensaje>`)
-            }
-            
-            if (content.length > 1000) {
-                return m.reply('❌ El mensaje de despedida no puede exceder los 1000 caracteres.')
-            }
-            
-            chat.sBye = content
-            await m.reply(`✅ *Despedida configurada correctamente*\n\n📝 Nuevo mensaje:\n${content}`)
-            break
-            
-        case 'on':
-        case 'activar':
-        case 'enable':
-            chat.welcome = true
-            await m.reply('✅ *Sistema de bienvenida/despedida ACTIVADO*')
-            break
-            
-        case 'off':
-        case 'desactivar':
-        case 'disable':
-            chat.welcome = false
-            await m.reply('✅ *Sistema de bienvenida/despedida DESACTIVADO*')
-            break
-            
-        case 'view':
-        case 'ver':
-        case 'config':
-            const status = chat.welcome ? '🟢 ACTIVADO' : '🔴 DESACTIVADO'
-            const welcomeMsg = chat.sWelcome || '🎉 ¡Bienvenido/a al grupo!'
-            const byeMsg = chat.sBye || '👋 ¡Hasta luego!'
-            
-            const configMessage = `
-*⚙️ CONFIGURACIÓN ACTUAL*
-
-*Estado:* ${status}
-*Grupo:* ${groupMetadataActual.subject}
-
-*🎉 MENSAJE DE BIENVENIDA:*
-${welcomeMsg}
-
-*👋 MENSAJE DE DESPEDIDA:*
-${byeMsg}
-
-*📊 ESTADÍSTICAS:*
-• Bienvenida: ${welcomeMsg.length} caracteres
-• Despedida: ${byeMsg.length} caracteres
-
-*📌 USO:*
-• ${usedPrefix}setwelcome <opción> <mensaje>
-• ${usedPrefix}setwelcome on/off
-• ${usedPrefix}setwelcome view
-            `.trim()
-            
-            await m.reply(configMessage)
-            break
-            
-        case 'reset':
-        case 'reiniciar':
-            delete chat.sWelcome
-            delete chat.sBye
-            chat.welcome = true
-            await m.reply('✅ *Configuración restaurada a valores por defecto*')
-            break
-            
-        case 'test':
-        case 'probar':
-            // Simular una bienvenida para prueba
-            const testUser = {
-                id: m.sender,
-                name: m.pushName || 'Usuario de Prueba'
-            }
-            
-            const welcomeTest = chat.sWelcome || '🎉 ¡Bienvenido/a al grupo!'
-            const formattedWelcome = formatMessage(welcomeTest, testUser, groupMetadataActual, 'welcome')
-            
-            await m.reply(`*🧪 PRUEBA DE BIENVENIDA*\n\n${formattedWelcome}`)
-            break
-            
-        case 'syntax':
-        case 'sintaxis':
-        case 'help':
-            const syntaxGuide = getSyntaxGuide()
-            await m.reply(syntaxGuide)
-            break
-            
-        default:
-            const helpMessage = `
-*🎉 COMANDO SETWELCOME*
-
-*Uso:* ${usedPrefix}setwelcome <opción> [mensaje]
-
-*Opciones disponibles:*
-• *welcome <mensaje>* - Configurar mensaje de bienvenida
-• *bye <mensaje>* - Configurar mensaje de despedida
-• *on/off* - Activar/desactivar sistema
-• *view* - Ver configuración actual
-• *test* - Probar mensaje de bienvenida
-• *reset* - Restaurar valores por defecto
-• *syntax* - Ver guía de sintaxis
-
-*Ejemplos:*
-• ${usedPrefix}setwelcome welcome ¡Hola @user! Bienvenido a @subject
-• ${usedPrefix}setwelcome bye @user ha dejado el grupo
-• ${usedPrefix}setwelcome on
-• ${usedPrefix}setwelcome view
-
-*📋 Para ver la guía completa de variables:*
-${usedPrefix}setwelcome syntax
-            `.trim()
-            
-            await m.reply(helpMessage)
-    }
-}
-
-// Función para formatear mensajes con variables
-function formatMessage(message, user, group, type = 'welcome') {
-    const now = new Date()
-    const time = now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
-    const date = now.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-    
-    const replacements = {
-        '@user': user.name || 'Usuario',
-        '@number': user.id.split('@')[0] || '',
-        '@subject': group.subject || 'Grupo',
-        '@desc': group.desc || 'Sin descripción',
-        '@owner': 'Administrador',
-        '@creation': 'Hoy',
-        '@time': time,
-        '@date': date,
-        '@membercount': group.participants?.length || 0,
-        '@botname': global.botname,
-        '@type': type === 'welcome' ? 'bienvenida' : 'despedida',
-        '@mention': `@${user.id.split('@')[0]}`,
-        '@groupname': group.subject || 'Grupo'
-    }
-    
-    let formatted = message
-    for (const [key, value] of Object.entries(replacements)) {
-        const regex = new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi')
-        formatted = formatted.replace(regex, value)
-    }
-    
-    return formatted
-}
-
-// Guía completa de sintaxis
-function getSyntaxGuide() {
-    return `
-🎨 *VARIABLES DISPONIBLES PARA BIENVENIDAS/DESPEDIDAS:*
-
-*Información del usuario:*
-• @user → Nombre del usuario
-• @number → Número del usuario
-• @mention → Mención (@número)
-
-*Información del grupo:*
-• @subject → Nombre del grupo
-• @groupname → Nombre del grupo
-• @desc → Descripción del grupo
-• @membercount → Total de miembros
-
-*Fecha y hora:*
-• @time → Hora actual (HH:MM)
-• @date → Fecha actual
-
-*Otros:*
-• @botname → Nombre del bot
-• @type → "bienvenida" o "despedida"
-
-*EJEMPLOS:*
-¡Hola @user! Bienvenido a @subject 👋
-@mention se unió al grupo @groupname 🎉
-@user ha salido de @subject 👋
-Bienvenido @user! Somos @membercount miembros 🤝
+    const errorMsg = `
+╭━━〔⚠️ ERROR EN SETWELCOME 〕━━╮
+┃
+┃ 🐛 *Comando:* ${command}
+┃ 👤 *Usuario:* @${m.sender.split('@')[0]}
+┃
+┃ 📛 *Error:*
+┃ ${error.message}
+┃
+┃ 🔧 *Solución:*
+┃ 1. Verifica los parámetros
+┃ 2. Revisa la sintaxis
+┃ 3. Reporta el error con:
+┃    ${usedPrefix}report
+┃
+╰━━━━━━━━━━━━━━━━━━━━━╯
     `.trim()
+    
+    await conn.reply(m.chat, errorMsg, m)
+  }
 }
 
-// Exportar funciones para el handler de eventos
-export const welcomeFunctions = {
-    formatMessage,
-    getSyntaxGuide
+// Función para formatear mensajes
+function formatMessage(message, user, group, type = 'welcome') {
+  const now = new Date()
+  const replacements = {
+    '@user': user.name || 'Usuario',
+    '@number': user.id.split('@')[0] || '',
+    '@mention': `@${user.id.split('@')[0]}`,
+    '@subject': group.subject || 'Grupo',
+    '@desc': group.desc || 'Sin descripción',
+    '@membercount': group.participants?.length || 0,
+    '@time': now.toLocaleTimeString('es-ES'),
+    '@date': now.toLocaleDateString('es-ES'),
+    '@botname': global.botname || 'Asta Bot'
+  }
+  
+  let formatted = message
+  for (const [key, value] of Object.entries(replacements)) {
+    formatted = formatted.replace(new RegExp(key, 'gi'), value)
+  }
+  
+  return formatted
 }
 
+// 🔧 CONFIGURACIÓN DEL COMANDO
 handler.help = ['setwelcome']
 handler.tags = ['group']
-handler.command = /^(setwelcome|configwelcome|bienvenida|despedida)$/i
+handler.command = ['setwelcome', 'configwelcome', 'bienvenida']
+
+// 🎯 RESTRICCIONES
 handler.group = true
 handler.admin = true
-handler.botAdmin = false
 
 export default handler
