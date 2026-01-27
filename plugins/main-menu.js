@@ -1,13 +1,21 @@
+import moment from 'moment-timezone'
+
 let handler = async (m, { conn, usedPrefix }) => {
-  let totalreg = Object.keys(global.db.data.users).length;
-  let totalCommands = Object.values(global.plugins).filter(
-    (v) => v.help && v.tags
-  ).length;
-  let libreria = 'Baileys';
-  let vs = '1.3';
-  let userId = m.sender;
-  
-  let infoText = `╭─━━━━━━━━━━━━━━━─╮
+    // Evitar envío duplicado
+    if (m.id.startsWith('NJX-') || (m.id.startsWith('BAE5') && m.id.length === 16) || (m.id.startsWith('B24E') && m.id.length === 20)) {
+        return
+    }
+
+    let totalreg = Object.keys(global.db.data.users).length;
+    let totalCommands = Object.values(global.plugins).filter((v) => v.help && v.tags).length;
+    let libreria = 'Baileys';
+    let vs = '1.3';
+    let userId = m.sender;
+    let _uptime = process.uptime() * 1000;
+    let uptime = clockString(_uptime);
+    let name = conn.getName(userId);
+
+    let infoText = `╭─━━━━━━━━━━━━━━━─╮
 │ 🎭 ¡Hola @${userId.split('@')[0]}! 💖
 ╰─━━━━━━━━━━━━━━━─╯
 
@@ -15,8 +23,11 @@ Me llamo『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡
 
 ╭─═⊰ 📡 𝐄𝐒𝐓𝐀𝐃𝐎 𝐀𝐂𝐓𝐈𝐕𝐎
 │ 🤖 Estado: ${(conn.user.jid == global.conn.user.jid ? '🟢 PREMIUM' : '🔗 prem-ʙᴏᴛ')}
+│ ⚡ Activo: 『${uptime}』
 │ 👥 Users: 『${totalreg.toLocaleString()}』🔥
 │ 🛠️ Comandos: 『${totalCommands}』⚙️
+│ 📅 Fecha: ${moment().tz('America/Mexico_City').format('DD/MM/YYYY')}
+│ 🕐 Hora: ${moment().tz('America/Mexico_City').format('HH:mm:ss')}
 │ 📅 Librería » ${libreria}
 │ 🌍 Servidor: México 🇲🇽
 │ 📡 Ping: Online ✅
@@ -81,7 +92,6 @@ Me llamo『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡
         ╰┈➤ Ganar coins y exp pescando  
 ╰┈➤ 🏰 *#mazmorra / #dungeon*
         ╰┈➤ Explorar mazmorras para ganar coins y exp  
-  
 
 
 ┏━━━━━━━━━━━━━━┓
@@ -115,7 +125,6 @@ Me llamo『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡
         ╰┈➤ Descargar un APK de Aptoide  
 ╰┈➤ 🎥 *#ytsearch / #search* + [busqueda]
         ╰┈➤ Buscar videos de YouTube  
-
 
 
 ┏━━━━━━━━━━━━━━┓
@@ -167,7 +176,6 @@ Me llamo『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡
         ╰┈➤ Votar por un personaje para subir su valor  
 ╰┈➤ 🏆 *#waifusboard / #waifustop / #topwaifus / #wtop* + [número]
         ╰┈➤ Ver el top de personajes con mayor valor  
-
 
 
 ┏━━━━━━━━━━━━━━┓
@@ -355,7 +363,6 @@ Me llamo『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡
         ╰┈➤ Ver enlace de invitación del grupo  
 
 
-
 ┏━━━━━━━━━━━━━━┓
 *🎌 ANIME*  
 ┗━━━━━━━━━━━━━━┛
@@ -461,56 +468,48 @@ Me llamo『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡
         ╰┈➤ Buscar una waifu aleatoria  
 ╰┈➤ 💑 *#ppcouple / #ppcp*
         ╰┈➤ Genera imágenes para amistades o parejas  
+`;
 
+    let buttons = [
+        { buttonId: usedPrefix + 'code', buttonText: { displayText: '🤖 Sup-Bot' }, type: 1 }
+    ];
 
+    // URL de imagen confiable - Usa esta si Catbox falla
+    let mediaUrl = 'https://telegra.ph/file/8d1e6c4b6c7b7b8d6a4f3.jpg'; // Imagen de Telegraph
+    // Otra alternativa: 'https://i.imgur.com/ejemplo.jpg'
 
-┏━━━━━━━━━━━━━━┓
-*🔞 NSFW*  
-┗━━━━━━━━━━━━━━┛
-╰┈➤ ✿ Comandos NSFW  
-
-╰┈➤ 🔞 *#danbooru / #dbooru* + [Tags]
-        ╰┈➤ Buscar imágenes en Danbooru  
-╰┈➤ 🔞 *#gelbooru / #gbooru* + [Tags]
-        ╰┈➤ Buscar imágenes en Gelbooru  
-╰┈➤ 🔞 *#rule34 / #r34* + [Tags]
-        ╰┈➤ Buscar imágenes en Rule34  
-╰┈➤ 🎥 *#xvideos / #xvideosdl* + [Link]
-        ╰┈➤ Descargar un video de Xvideos  
-╰┈➤ 🎥 *#xnxx / #xnxxdl* + [Link]
-        ╰┈➤ Descargar un video de Xnxx  
-╰┈➤ 💦 *#mamada*  
-        ╰┈➤ manda un video de mamando `;
-
-  let buttons = [
-      { buttonId: usedPrefix + 'code', buttonText: { displayText: '🤖 Sup-Bot' }, type: 1 }
-  ];
-  
-  // URL de la imagen o video (cambia por tu propia URL)
-  let mediaUrl = 'https://github.com/Fer280809/Asta_bot/blob/main/lib/catalogo.jpg'; // Cambia esto por tu imagen
-  // let mediaUrl = 'https://example.com/video.mp4'; // O usa un video
-  
-  try {
-    // Intenta enviar con imagen
-    await conn.sendMessage(m.chat, {
-      image: { url: mediaUrl },
-      caption: infoText,
-      footer: "『𝕬𝖘𝖙𝖆-𝕭𝖔𝖙』⚡",
-      buttons: buttons,
-      headerType: 4,
-      mentions: [userId]
-    }, { quoted: m });
-  } catch {
-    // Si falla, envía sin imagen (método alternativo)
-    let buttonMessage = {
-      text: infoText,
-      footer: "『𝕬𝖘𝖙𝖆-𝕭𝖔𝖙』⚡",
-      buttons: buttons,
-      headerType: 1,
-      mentions: [userId]
-    };
-    await conn.sendMessage(m.chat, buttonMessage, { quoted: m });
-  }
+    try {
+        // Método 1: Enviar con imagen
+        await conn.sendMessage(m.chat, {
+            image: { url: mediaUrl },
+            caption: infoText.substring(0, 4096), // WhatsApp tiene límite de 4096 caracteres
+            footer: "『𝕬𝖘𝖙𝖆-𝕭𝖔𝖙』⚡",
+            buttons: buttons,
+            headerType: 4,
+            mentions: [userId]
+        }, { quoted: m });
+        
+        // Si el texto es muy largo, enviar el resto en otro mensaje
+        if (infoText.length > 4096) {
+            let remainingText = infoText.substring(4096);
+            await conn.sendMessage(m.chat, {
+                text: remainingText,
+                mentions: [userId]
+            }, { quoted: m });
+        }
+    } catch (error) {
+        console.error('Error al enviar imagen:', error);
+        // Método alternativo: dividir en partes
+        let chunks = splitMessage(infoText, 3000);
+        
+        for (let i = 0; i < chunks.length; i++) {
+            await conn.sendMessage(m.chat, {
+                text: chunks[i],
+                mentions: [userId]
+            }, { quoted: i === 0 ? m : null });
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
 };
 
 handler.help = ['menu2'];
@@ -518,3 +517,32 @@ handler.tags = ['main'];
 handler.command = ['menú2', 'menu2', 'help2'];
 
 export default handler;
+
+function clockString(ms) {
+    let seconds = Math.floor((ms / 1000) % 60);
+    let minutes = Math.floor((ms / (1000 * 60)) % 60);
+    let hours = Math.floor((ms / (1000 * 60 * 60)) % 24);
+    return `${hours}h ${minutes}m ${seconds}s`;
+}
+
+function splitMessage(text, maxLength) {
+    const chunks = [];
+    let currentChunk = '';
+    
+    const lines = text.split('\n');
+    
+    for (const line of lines) {
+        if ((currentChunk + line).length > maxLength) {
+            chunks.push(currentChunk);
+            currentChunk = line + '\n';
+        } else {
+            currentChunk += line + '\n';
+        }
+    }
+    
+    if (currentChunk) {
+        chunks.push(currentChunk);
+    }
+    
+    return chunks;
+}
