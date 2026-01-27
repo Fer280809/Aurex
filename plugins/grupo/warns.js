@@ -1,4 +1,4 @@
-import db from '../lib/database.js'
+import db from '../../lib/database.js'
 
 const handler = async (m, { conn, text, command, usedPrefix }) => {
 try {
