@@ -1,5 +1,5 @@
-import { canLevelUp, xpRange } from '../lib/levelling.js'
-import db from '../lib/database.js'
+import { canLevelUp, xpRange } from '../../lib/levelling.js'
+import db from '../../lib/database.js'
 
 let handler = async (m, { conn }) => {
 let mentionedJid = await m.mentionedJid
