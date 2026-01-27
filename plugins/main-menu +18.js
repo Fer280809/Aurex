@@ -1,3 +1,4 @@
+        
 let handler = async (m, { conn, usedPrefix }) => {
   let totalreg = Object.keys(global.db.data.users).length;
   let totalCommands = Object.values(global.plugins).filter(
@@ -6,7 +7,7 @@ let handler = async (m, { conn, usedPrefix }) => {
   let libreria = 'Baileys';
   let vs = '1.3';
   let userId = m.sender;
-  
+
   let infoText = `╭─━━━━━━━━━━━━━━━─╮
 │ 🎭 ¡Hola @${userId.split('@')[0]}! 💖
 ╰─━━━━━━━━━━━━━━━─╯
@@ -74,15 +75,14 @@ Me llamo『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡
 > ✦ 𝐻𝑎𝑐𝑒𝑟 𝑡𝑖𝑗𝑒𝑟𝑎𝑠. `;
 
   let buttons = [
-      { buttonId: usedPrefix + 'menu', buttonText: { displayText: '📜 Menu' }, type: 1 },
+    { buttonId: usedPrefix + 'menu2', buttonText: { displayText: '📜 Menú' }, type: 1 }
   ];
-  
-  // URL de la imagen o video (cambia por tu propia URL)
-  let mediaUrl = 'https://github.com/Fer280809/Asta_bot/blob/main/lib/catalogo.jpg'; // Cambia esto por tu imagen
-  // let mediaUrl = 'https://example.com/video.mp4'; // O usa un video
-  
+
+  // ✅ URL RAW de GitHub (cambia "github.com" por "raw.githubusercontent.com")
+  let mediaUrl = 'https://raw.githubusercontent.com/Fer280809/Asta_bot/main/lib/catalogo.jpg';
+
   try {
-    // Intenta enviar con imagen
+    // Enviar con imagen usando URL raw
     await conn.sendMessage(m.chat, {
       image: { url: mediaUrl },
       caption: infoText,
@@ -91,8 +91,9 @@ Me llamo『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡
       headerType: 4,
       mentions: [userId]
     }, { quoted: m });
-  } catch {
-    // Si falla, envía sin imagen (método alternativo)
+  } catch (e) {
+    console.error('Error al enviar imagen:', e);
+    // Si falla, envía sin imagen
     let buttonMessage = {
       text: infoText,
       footer: "『𝕬𝖘𝖙𝖆-𝕭𝖔𝖙』⚡",
@@ -104,8 +105,8 @@ Me llamo『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡
   }
 };
 
-handler.help = ['menu18', 'menu+', 'help18', 'help+']
+handler.help = ['menu'];
 handler.tags = ['main'];
-handler.command = ['menu18', 'menu+', 'help18', 'help+'];
+handler.command = ['menú', 'menu', 'help'];
 
 export default handler;
