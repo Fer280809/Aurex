@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import fetch from 'node-fetch'
-import uploadFile from '../lib/uploadFile.js'
-import uploadImage from '../lib/uploadImage.js'
+import uploadFile from '../../lib/uploadFile.js'
+import uploadImage from '../../lib/uploadImage.js'
 import { FormData, Blob } from "formdata-node"
 import { fileTypeFromBuffer } from "file-type"
 import crypto from "crypto"
