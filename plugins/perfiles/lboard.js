@@ -1,4 +1,4 @@
-import { xpRange } from '../lib/levelling.js'
+import { xpRange } from '../../lib/levelling.js'
 
 let handler = async (m, { conn, args }) => {
 let users = Object.entries(global.db.data.users).map(([key, value]) => ({ ...value, jid: key }))
