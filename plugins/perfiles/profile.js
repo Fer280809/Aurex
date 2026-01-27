@@ -1,4 +1,4 @@
-import { xpRange } from '../lib/levelling.js'
+import { xpRange } from '../../lib/levelling.js'
 import moment from 'moment-timezone'
 import fetch from 'node-fetch'
 
