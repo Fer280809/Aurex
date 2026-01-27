@@ -1,4 +1,4 @@
-import { sticker, addExif } from '../lib/sticker.js'
+import { sticker, addExif } from '../../lib/sticker.js'
 import axios from 'axios'
 import fetch from 'node-fetch'
 
