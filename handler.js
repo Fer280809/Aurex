@@ -26,7 +26,7 @@ export async function handler(chatUpdate) {
         if (!m) return
         m.exp = 0
 
-        // Inicialización optimizada de datos
+        // INICIALIZACIÓN DE DATOS
         const user = global.db.data.users[m.sender] = global.db.data.users[m.sender] || {
             name: m.name || "",
             exp: 0, coin: 0, bank: 0, level: 0, health: 100,
@@ -41,7 +41,7 @@ export async function handler(chatUpdate) {
             sWelcome: "", sBye: "", detect: true, primaryBot: null,
             modoadmin: false, antiLink: true, nsfw: false,
             economy: true, gacha: true,
-            mutes: {}  // Sistema de mute
+            mutes: {}
         }
 
         const settings = global.db.data.settings[this.user.jid] = global.db.data.settings[this.user.jid] || {
@@ -49,20 +49,18 @@ export async function handler(chatUpdate) {
             antiPrivate: false, gponly: false
         }
 
-        // ===============================
-        // SISTEMA DE VERIFICACIÓN DE MUTE MEJORADO
-        // ===============================
+        // ============================================
+        // SISTEMA DE MUTE - CORREGIDO
+        // ============================================
         if (m.chat && m.chat.endsWith('@g.us') && !m.isBaileys && m.sender && !m.key.fromMe) {
-            // Asegurar que existe la estructura
             if (!chat.mutes) chat.mutes = {}
             
             const muteData = chat.mutes[m.sender]
             
             if (muteData) {
                 const now = Date.now()
-                
-                // Verificar si el mute ha expirado (solo si tiene tiempo límite)
                 let shouldDeleteMute = false
+                
                 if (muteData.expiresAt) {
                     if (muteData.expiresAt <= now) {
                         shouldDeleteMute = true
@@ -70,36 +68,22 @@ export async function handler(chatUpdate) {
                 }
                 
                 if (shouldDeleteMute) {
-                    // Eliminar mute expirado
                     delete chat.mutes[m.sender]
                 } else {
-                    // USUARIO ESTÁ MUTEADO - Bloquear mensaje
-                    
-                    // Intentar eliminar el mensaje si el bot es admin
+                    // INTENTAR ELIMINAR MENSAJE DEL USUARIO MUTEADO
                     try {
                         if (m.isGroup) {
                             let groupMetadata
-                            try {
-                                if (global.cachedGroupMetadata) {
-                                    groupMetadata = await global.cachedGroupMetadata(m.chat).catch(() => null)
-                                }
-                                if (!groupMetadata) {
-                                    groupMetadata = await this.groupMetadata(m.chat).catch(() => null)
-                                }
-                            } catch (e) {
-                                console.error('Error obteniendo metadata:', e)
+                            if (global.cachedGroupMetadata) {
+                                groupMetadata = await global.cachedGroupMetadata(m.chat).catch(() => null)
+                            }
+                            if (!groupMetadata) {
+                                groupMetadata = await this.groupMetadata(m.chat).catch(() => null)
                             }
                             
                             if (groupMetadata) {
                                 const participants = Array.isArray(groupMetadata.participants) ? groupMetadata.participants : []
-                                const botGroup = participants.find(p => {
-                                    try {
-                                        return areJidsSameUser(p.id, this.user.jid)
-                                    } catch {
-                                        return false
-                                    }
-                                }) || {}
-                                
+                                const botGroup = participants.find(p => areJidsSameUser(p.id, this.user.jid)) || {}
                                 const isBotAdmin = botGroup.admin === 'admin' || botGroup.admin === 'superadmin' || botGroup.admin === true
                                 
                                 if (isBotAdmin) {
@@ -118,11 +102,11 @@ export async function handler(chatUpdate) {
                         console.error('Error eliminando mensaje muteado:', e)
                     }
                     
-                    // Notificar al usuario (con límite de tiempo para evitar spam)
+                    // NOTIFICACIÓN CON LÍMITE DE TIEMPO
                     const lastNotification = global.muteNotifCache = global.muteNotifCache || {}
                     const key = `${m.chat}_${m.sender}`
                     
-                    if (!lastNotification[key] || (now - lastNotification[key] > 30000)) { // 30 segundos
+                    if (!lastNotification[key] || (now - lastNotification[key] > 30000)) {
                         let timeLeft = ''
                         if (muteData.expiresAt) {
                             const remaining = muteData.expiresAt - now
@@ -143,18 +127,15 @@ export async function handler(chatUpdate) {
                         }
                     }
                     
-                    // DETENER PROCESAMIENTO DEL MENSAJE
                     return
                 }
             }
         }
-        // ===============================
-        // FIN SISTEMA DE VERIFICACIÓN DE MUTE
-        // ===============================
+        // ============================================
 
         if (typeof m.text !== "string") m.text = ""
 
-        // Actualizar nombre del usuario
+        // ACTUALIZAR NOMBRE DEL USUARIO
         try {
             const newName = m.pushName || await this.getName(m.sender)
             if (typeof newName === "string" && newName.trim() && newName !== user.name) {
@@ -162,7 +143,7 @@ export async function handler(chatUpdate) {
             }
         } catch {}
 
-        // Verificaciones de permisos
+        // VERIFICACIONES DE PERMISOS
         const isROwner = [...global.owner].map(v => v.replace(/\D/g, "") + "@s.whatsapp.net").includes(m.sender)
         const isOwner = isROwner || m.fromMe
         const isPrems = isROwner || global.prems.map(v => v.replace(/\D/g, "") + "@s.whatsapp.net").includes(m.sender) || user.premium
@@ -172,7 +153,7 @@ export async function handler(chatUpdate) {
         if (settings.gponly && !isOwners && !m.chat.endsWith('g.us') && 
             !/code|p|ping|qr|estado|status|infobot|botinfo|report|reportar|invite|join|logout|suggest|help|menu/gim.test(m.text)) return
 
-        // Sistema de cola de mensajes
+        // SISTEMA DE COLA DE MENSAJES
         if (global.opts?.queque && m.text && !isPrems) {
             const queue = this.msgqueue
             queue.push(m.id || m.key.id)
@@ -185,7 +166,7 @@ export async function handler(chatUpdate) {
         if (m.isBaileys) return
         m.exp += Math.ceil(Math.random() * 10)
 
-        // Detección de administradores optimizada
+        // DETECCIÓN DE ADMINISTRADORES
         let groupMetadata = {}
         let participants = []
 
@@ -206,27 +187,14 @@ export async function handler(chatUpdate) {
         const decodeJid = (j) => this.decodeJid(j)
         const normJid = (j) => jidNormalizedUser(decodeJid(j))
 
-        const userGroup = m.isGroup ? participants.find(p => {
-            try {
-                return areJidsSameUser(normJid(p.jid || p.id), normJid(m.sender))
-            } catch {
-                return false
-            }
-        }) || {} : {}
-        
-        const botGroup = m.isGroup ? participants.find(p => {
-            try {
-                return areJidsSameUser(normJid(p.jid || p.id), normJid(this.user.jid))
-            } catch {
-                return false
-            }
-        }) || {} : {}
+        const userGroup = m.isGroup ? participants.find(p => areJidsSameUser(normJid(p.jid || p.id), normJid(m.sender))) || {} : {}
+        const botGroup = m.isGroup ? participants.find(p => areJidsSameUser(normJid(p.jid || p.id), normJid(this.user.jid))) || {} : {}
 
         const isRAdmin = userGroup?.admin === 'superadmin'
         const isAdmin = isRAdmin || userGroup?.admin === 'admin' || userGroup?.admin === true
         const isBotAdmin = botGroup?.admin === 'admin' || botGroup?.admin === 'superadmin' || botGroup?.admin === true
 
-        // Procesar plugins
+        // PROCESAR PLUGINS
         const ___dirname = path.join(path.dirname(fileURLToPath(import.meta.url)), "./plugins")
 
         for (const name in global.plugins) {
@@ -235,7 +203,7 @@ export async function handler(chatUpdate) {
 
             const __filename = join(___dirname, name)
 
-            // Ejecutar plugin.all si existe
+            // PLUGIN.ALL
             if (typeof plugin.all === "function") {
                 try {
                     await plugin.all.call(this, m, { chatUpdate, __dirname: ___dirname, __filename, user, chat, settings })
@@ -244,10 +212,9 @@ export async function handler(chatUpdate) {
                 }
             }
 
-            // Saltar plugins admin si no hay restrict
             if (!global.opts?.restrict && plugin.tags?.includes("admin")) continue
 
-            // Manejo de prefijos
+            // MANEJO DE PREFIJOS
             const pluginPrefix = plugin.customPrefix || conn.prefix || global.prefix
             let match = null
 
@@ -265,7 +232,7 @@ export async function handler(chatUpdate) {
 
             if (!match) continue
 
-            // Ejecutar before hook
+            // BEFORE HOOK
             if (typeof plugin.before === "function") {
                 if (await plugin.before.call(this, m, {
                     match, conn: this, participants, groupMetadata,
@@ -277,7 +244,7 @@ export async function handler(chatUpdate) {
 
             if (typeof plugin !== "function") continue
 
-            // Determinar prefijo usado
+            // DETERMINAR PREFIJO USADO
             let usedPrefix = (match[0] || "")[0] || (global.sinprefix ? '' : undefined)
             if (usedPrefix === undefined) continue
 
@@ -285,7 +252,7 @@ export async function handler(chatUpdate) {
             let [command, ...args] = noPrefix.trim().split(" ").filter(v => v)
             command = (command || "").toLowerCase()
 
-            // Verificar si el comando coincide
+            // VERIFICAR SI EL COMANDO COINCIDE
             let isAccept = false
             if (plugin.command instanceof RegExp) {
                 isAccept = plugin.command.test(command)
@@ -302,7 +269,7 @@ export async function handler(chatUpdate) {
             global.comando = command
             user.commands = (user.commands || 0) + 1
 
-            // Verificar baneos
+            // VERIFICAR BANEOS
             if (chat.isBanned && !isROwner) {
                 const aviso = `⚠️ El bot *${global.botname}* está desactivado en este grupo.\n\n> 🔹 Un *administrador* puede activarlo usando:\n> » *${usedPrefix}bot on*`
                 await m.reply(aviso)
@@ -315,7 +282,7 @@ export async function handler(chatUpdate) {
                 return
             }
 
-            // Verificar permisos del comando
+            // VERIFICAR PERMISOS DEL COMANDO
             const adminMode = chat.modoadmin
             const requiresAdmin = plugin.botAdmin || plugin.admin || plugin.group
 
@@ -332,7 +299,7 @@ export async function handler(chatUpdate) {
             m.isCommand = true
             m.exp += plugin.exp ? parseInt(plugin.exp) : 10
 
-            // Ejecutar el plugin
+            // EJECUTAR EL PLUGIN
             try {
                 await plugin.call(this, m, {
                     match, usedPrefix, noPrefix, args,
@@ -365,18 +332,18 @@ export async function handler(chatUpdate) {
     } catch (err) {
         console.error(err)
     } finally {
-        // Limpiar cola de mensajes
+        // LIMPIAR COLA DE MENSAJES
         if (global.opts?.queque && m?.text) {
             const index = this.msgqueue.indexOf(m.id || m.key.id)
             if (index > -1) this.msgqueue.splice(index, 1)
         }
 
-        // Actualizar experiencia del usuario
+        // ACTUALIZAR EXPERIENCIA DEL USUARIO
         if (m?.sender && global.db.data.users[m.sender]) {
             global.db.data.users[m.sender].exp += m.exp || 0
         }
 
-        // Imprimir mensaje
+        // IMPRIMIR MENSAJE
         try {
             if (!global.opts?.noprint) {
                 await import("./lib/print.js").then(mod => mod.default(m, this))
@@ -387,7 +354,7 @@ export async function handler(chatUpdate) {
     }
 }
 
-// Función auxiliar para formatear tiempo de mute
+// FUNCIÓN PARA FORMATEAR TIEMPO DE MUTE
 function formatMuteTime(ms) {
     if (ms < 1000) return '0 segundos'
 
@@ -397,15 +364,15 @@ function formatMuteTime(ms) {
     const days = Math.floor(ms / (1000 * 60 * 60 * 24))
 
     const parts = []
-    if (days > 0) parts.push(`${days} día${days > 1 ? 's' : ''}`)
-    if (hours > 0) parts.push(`${hours} hora${hours > 1 ? 's' : ''}`)
-    if (minutes > 0) parts.push(`${minutes} minuto${minutes > 1 ? 's' : ''}`)
-    if (seconds > 0) parts.push(`${seconds} segundo${seconds > 1 ? 's' : ''}`)
+    if (days > 0) parts.push(`${days}d`)
+    if (hours > 0) parts.push(`${hours}h`)
+    if (minutes > 0) parts.push(`${minutes}m`)
+    if (seconds > 0) parts.push(`${seconds}s`)
 
-    return parts.join(', ') || '0 segundos'
+    return parts.join(' ') || '0s'
 }
 
-// Función de fallo optimizada
+// FUNCIÓN DE FALLO
 global.dfail = (type, m, conn) => {
     const messages = {
         rowner: `💠 *Acceso denegado*\nEl comando *${global.comando}* solo puede ser usado por los *creadores del bot*.`,
@@ -427,25 +394,7 @@ global.dfail = (type, m, conn) => {
     }
 }
 
-// Función auxiliar para formatear tiempo (usada en mute/unmute)
-function formatTime(ms) {
-    if (ms < 1000) return '0 segundos'
-
-    const seconds = Math.floor((ms / 1000) % 60)
-    const minutes = Math.floor((ms / (1000 * 60)) % 60)
-    const hours = Math.floor((ms / (1000 * 60 * 60)) % 24)
-    const days = Math.floor(ms / (1000 * 60 * 60 * 24))
-
-    const parts = []
-    if (days > 0) parts.push(`${days} día${days > 1 ? 's' : ''}`)
-    if (hours > 0) parts.push(`${hours} hora${hours > 1 ? 's' : ''}`)
-    if (minutes > 0) parts.push(`${minutes} minuto${minutes > 1 ? 's' : ''}`)
-    if (seconds > 0) parts.push(`${seconds} segundo${seconds > 1 ? 's' : ''}`)
-
-    return parts.join(', ') || '0 segundos'
-}
-
-// Watch para recargar automáticamente
+// WATCH PARA RECARGAR AUTOMÁTICAMENTE
 let file = global.__filename(import.meta.url, true)
 watchFile(file, async () => {
     unwatchFile(file)
