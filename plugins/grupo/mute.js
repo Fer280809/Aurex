@@ -157,7 +157,7 @@ const handler = async (m, { isOwner, isAdmin, conn, text, participants, args, co
   }
 }
 
-// Función para formatear tiempo
+// FUNCIÓN PARA FORMATEAR TIEMPO (AGREGAR ESTO AL FINAL DEL ARCHIVO)
 function formatTime(ms) {
   const seconds = Math.floor(ms / 1000)
   const minutes = Math.floor(seconds / 60)
