@@ -136,7 +136,7 @@ let handler = async (m, { conn, args }) => {
 
 handler.help = ['mods']
 handler.tags = ['main']
-handler.command = ['dev', 'owners']
+handler.command = ['dev2', 'owners2']
 handler.rowner = true
 
 export default handler
