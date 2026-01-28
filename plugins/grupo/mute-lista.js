@@ -1,71 +1,91 @@
-var handler = async (m, { conn }) => {
+const handler = async (m, { isOwner, isAdmin, conn, participants, args, command }) => {
+  if (!m.isGroup) return m.reply('❌ Este comando solo funciona en grupos')
+
   try {
-    // Verificar estructura de datos
-    if (!global.db.data.chats?.[m.chat]?.mutes) {
-      return conn.reply(m.chat, '✓ No hay usuarios silenciados en este grupo.', m)
+    // Verificar si hay mutes en este grupo
+    const mutes = global.db.data?.chats?.[m.chat]?.mutes
+    if (!mutes || Object.keys(mutes).length === 0) {
+      return m.reply('📭 No hay usuarios silenciados en este grupo')
     }
 
-    const chatMutes = global.db.data.chats[m.chat].mutes
-    const mutedUsers = Object.keys(chatMutes)
-
-    // Filtrar mutes expirados
+    let teks = `*📋 USUARIOS SILENCIADOS*\n\n`
+    let count = 0
     const now = Date.now()
-    for (let user of mutedUsers) {
-      const muteData = chatMutes[user]
-      if (muteData.expiresAt && muteData.expiresAt < now) {
-        delete chatMutes[user]
+
+    for (const [jid, data] of Object.entries(mutes)) {
+      count++
+      
+      // Verificar si el mute ha expirado
+      if (data.expiresAt && data.expiresAt <= now) {
+        delete mutes[jid]
+        continue
       }
-    }
 
-    // Obtener lista actualizada
-    const currentMuted = Object.keys(chatMutes)
-
-    if (currentMuted.length === 0) {
-      return conn.reply(m.chat, '✓ No hay usuarios silenciados en este grupo.', m)
-    }
-
-    let list = '📋 *USUARIOS SILENCIADOS*\n\n'
-    for (let user of currentMuted) {
-      const data = chatMutes[user]
-      const name = data.name || user.split('@')[0]
-      const mutedBy = data.mutedBy ? `@${data.mutedBy.split('@')[0]}` : 'Desconocido'
-      const mutedAt = new Date(data.mutedAt).toLocaleString()
-
+      const userName = data.name || jid.split('@')[0]
+      const adminName = data.adminName || 'Desconocido'
+      const mutedAt = new Date(data.mutedAt).toLocaleString('es-MX', {
+        timeZone: 'America/Mexico_City',
+        hour12: true
+      })
+      
+      teks += `*${count}.* @${jid.split('@')[0]}\n`
+      teks += `   ◦ *Silenciado por:* @${data.mutedBy.split('@')[0]}\n`
+      teks += `   ◦ *Fecha:* ${mutedAt}\n`
+      
       if (data.expiresAt) {
-        const expiresIn = data.expiresAt - now
-        const timeLeft = expiresIn > 0 ? `Expira en: ${formatTime(expiresIn)}` : 'Expirado'
-        list += `• @${user.split('@')[0]} (${name})\n  └ ${timeLeft}\n  └ Silenciado por: ${mutedBy}\n  └ Fecha: ${mutedAt}\n\n`
+        const remaining = data.expiresAt - now
+        if (remaining > 0) {
+          teks += `   ◦ *Expira en:* ${formatTime(remaining)}\n`
+        } else {
+          teks += `   ◦ *Expirado*\n`
+        }
       } else {
-        list += `• @${user.split('@')[0]} (${name})\n  └ Silenciado indefinidamente\n  └ Silenciado por: ${mutedBy}\n  └ Fecha: ${mutedAt}\n\n`
+        teks += `   ◦ *Duración:* Indefinida\n`
       }
+      teks += `\n`
     }
 
-    conn.reply(m.chat, list, m, { mentions: currentMuted })
+    // Actualizar si se eliminaron mutes expirados
+    if (count !== Object.keys(mutes).length) {
+      // Puedes guardar los cambios si es necesario
+    }
 
-  } catch (e) {
-    console.error('Error en mutelist:', e)
-    conn.reply(m.chat, '⚠︎ Error al obtener la lista de silenciados.', m)
+    if (count === 0) {
+      return m.reply('📭 No hay usuarios silenciados activos en este grupo')
+    }
+
+    teks += `\n📊 *Total:* ${count} usuario${count !== 1 ? 's' : ''} silenciado${count !== 1 ? 's' : ''}`
+
+    // Obtener menciones
+    const mentions = Object.keys(mutes).map(jid => jid)
+
+    conn.sendMessage(m.chat, { 
+      text: teks, 
+      mentions: mentions 
+    })
+
+  } catch (error) {
+    console.error('Error en listmute:', error)
+    m.reply(`❌ Ocurrió un error: ${error.message}`)
   }
 }
 
+// Función para formatear tiempo (misma que en mute.js)
 function formatTime(ms) {
-  const seconds = Math.floor((ms / 1000) % 60)
-  const minutes = Math.floor((ms / (1000 * 60)) % 60)
-  const hours = Math.floor((ms / (1000 * 60 * 60)) % 24)
-  const days = Math.floor(ms / (1000 * 60 * 60 * 24))
-
-  const parts = []
-  if (days > 0) parts.push(`${days}d`)
-  if (hours > 0) parts.push(`${hours}h`)
-  if (minutes > 0) parts.push(`${minutes}m`)
-  if (seconds > 0) parts.push(`${seconds}s`)
-
-  return parts.join(' ') || '0s'
+  const seconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+  
+  if (days > 0) return `${days}d ${hours % 24}h`
+  if (hours > 0) return `${hours}h ${minutes % 60}m`
+  if (minutes > 0) return `${minutes}m ${seconds % 60}s`
+  return `${seconds}s`
 }
 
-handler.help = ['mutelist']
-handler.tags = ['grupo']
-handler.command = ['mutelist', 'listamute', 'muteados']
+handler.help = ['listmute', 'mutelist', 'listasilenciados']
+handler.tags = ['group']
+handler.command = ['listmute', 'mutelist', 'silenciados']
 handler.admin = true
 handler.group = true
 
