@@ -1,37 +1,58 @@
-// Guarda la imagen en tu proyecto como `media/catalogo.jpg`
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import axios from 'axios';
 
 let handler = async (m, { conn }) => {
   let webUrl = 'https://study-bot.xo.je/';
-  
+  let imageUrl = 'https://raw.githubusercontent.com/Fer280809/Asta_bot/main/lib/catalogo.jpg';
+
   try {
-    // Leer imagen local
-    const imagePath = join(__dirname, '../media/catalogo.jpg');
-    const imageBuffer = readFileSync(imagePath);
-    
+    // 1. Primero enviamos la imagen sola
     await conn.sendMessage(m.chat, {
-      image: imageBuffer,
-      caption: '『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡\n\nVisita mi web: ' + webUrl,
-      templateButtons: [{
-        urlButton: {
-          displayText: '🌐 Abrir Sitio Web',
-          url: webUrl
-        }
-      }]
+      image: { url: imageUrl },
+      caption: '『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡\n*Imagen cargada correctamente*'
     }, { quoted: m });
+
+    // 2. Luego enviamos el mensaje con botones
+    await conn.sendMessage(m.chat, {
+      text: '🌐 *MI PÁGINA WEB*\n\nHaz clic en el botón para visitar mi sitio web oficial:',
+      footer: 'Asta-Bot © 2024',
+      templateButtons: [
+        {
+          index: 1,
+          urlButton: {
+            displayText: '🔗 VISITAR SITIO WEB',
+            url: webUrl
+          }
+        },
+        {
+          index: 2,
+          callButton: {
+            displayText: '📞 CONTACTO',
+            phoneNumber: '+1234567890' // Cambia por tu número
+          }
+        }
+      ]
+    }, { quoted: m });
+
+  } catch (error) {
+    console.error('Error:', error);
     
-  } catch (e) {
-    console.error(e);
-    m.reply(`🌐 Mi web: ${webUrl}`);
+    // Fallback si falla
+    await conn.sendMessage(m.chat, {
+      text: `『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡\n\n🌐 *Mi página web:* ${webUrl}\n\n⚠️ *Nota:* Copia y pega este enlace en tu navegador.`,
+      contextInfo: {
+        externalAdReply: {
+          title: 'Asta-Bot Web',
+          body: 'Haz clic para visitar',
+          thumbnailUrl: imageUrl,
+          sourceUrl: webUrl,
+          mediaType: 1
+        }
+      }
+    }, { quoted: m });
   }
 };
 
 handler.help = ['web'];
 handler.tags = ['main'];
-handler.command = ['web', 'pagina'];
+handler.command = ['web', 'pagina', 'website'];
 export default handler;
