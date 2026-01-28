@@ -520,6 +520,6 @@ Me llamo『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡
 
 handler.help = ['menu'];
 handler.tags = ['main'];
-handler.command = ['menú', 'menu', 'help'];
+handler.command = ['menú2', 'menu2', 'help2'];
 
 export default handler;
