@@ -12,21 +12,21 @@ const delay = ms => isNumber(ms) && new Promise(resolve => setTimeout(resolve, m
 export async function handler(chatUpdate) {
     this.msgqueue = this.msgqueue || []
     this.uptime = this.uptime || Date.now()
-
+    
     if (!chatUpdate) return
     await this.pushMessage(chatUpdate.messages).catch(console.error)
-
+    
     let m = chatUpdate.messages[chatUpdate.messages.length - 1]
     if (!m) return
-
+    
     if (!global.db.data) await global.loadDatabase()
-
+    
     try {
         m = smsg(this, m) || m
         if (!m) return
         m.exp = 0
-
-        // INICIALIZACIÓN DE DATOS
+        
+        // Inicialización optimizada de datos
         const user = global.db.data.users[m.sender] = global.db.data.users[m.sender] || {
             name: m.name || "",
             exp: 0, coin: 0, bank: 0, level: 0, health: 100,
@@ -35,125 +35,40 @@ export async function handler(chatUpdate) {
             banned: false, bannedReason: "", commands: 0,
             afk: -1, afkReason: "", warn: 0
         }
-
+        
         const chat = global.db.data.chats[m.chat] = global.db.data.chats[m.chat] || {
             isBanned: false, isMute: false, welcome: false,
             sWelcome: "", sBye: "", detect: true, primaryBot: null,
             modoadmin: false, antiLink: true, nsfw: false,
-            economy: true, gacha: true,
-            mutes: {}
+            economy: true, gacha: true
         }
-
+        
         const settings = global.db.data.settings[this.user.jid] = global.db.data.settings[this.user.jid] || {
             self: false, restrict: true, jadibotmd: true,
             antiPrivate: false, gponly: false
         }
-
-        // ============================================
-        // SISTEMA DE MUTE - CORREGIDO
-        // ============================================
-        if (m.chat && m.chat.endsWith('@g.us') && !m.isBaileys && m.sender && !m.key.fromMe) {
-            if (!chat.mutes) chat.mutes = {}
-            
-            const muteData = chat.mutes[m.sender]
-            
-            if (muteData) {
-                const now = Date.now()
-                let shouldDeleteMute = false
-                
-                if (muteData.expiresAt) {
-                    if (muteData.expiresAt <= now) {
-                        shouldDeleteMute = true
-                    }
-                }
-                
-                if (shouldDeleteMute) {
-                    delete chat.mutes[m.sender]
-                } else {
-                    // INTENTAR ELIMINAR MENSAJE DEL USUARIO MUTEADO
-                    try {
-                        if (m.isGroup) {
-                            let groupMetadata
-                            if (global.cachedGroupMetadata) {
-                                groupMetadata = await global.cachedGroupMetadata(m.chat).catch(() => null)
-                            }
-                            if (!groupMetadata) {
-                                groupMetadata = await this.groupMetadata(m.chat).catch(() => null)
-                            }
-                            
-                            if (groupMetadata) {
-                                const participants = Array.isArray(groupMetadata.participants) ? groupMetadata.participants : []
-                                const botGroup = participants.find(p => areJidsSameUser(p.id, this.user.jid)) || {}
-                                const isBotAdmin = botGroup.admin === 'admin' || botGroup.admin === 'superadmin' || botGroup.admin === true
-                                
-                                if (isBotAdmin) {
-                                    await this.sendMessage(m.chat, {
-                                        delete: {
-                                            remoteJid: m.chat,
-                                            fromMe: false,
-                                            id: m.key.id,
-                                            participant: m.sender
-                                        }
-                                    }).catch(() => null)
-                                }
-                            }
-                        }
-                    } catch (e) {
-                        console.error('Error eliminando mensaje muteado:', e)
-                    }
-                    
-                    // NOTIFICACIÓN CON LÍMITE DE TIEMPO
-                    const lastNotification = global.muteNotifCache = global.muteNotifCache || {}
-                    const key = `${m.chat}_${m.sender}`
-                    
-                    if (!lastNotification[key] || (now - lastNotification[key] > 30000)) {
-                        let timeLeft = ''
-                        if (muteData.expiresAt) {
-                            const remaining = muteData.expiresAt - now
-                            if (remaining > 0) {
-                                timeLeft = `\n⏳ Tiempo restante: ${formatMuteTime(remaining)}`
-                            }
-                        }
-                        
-                        try {
-                            await this.sendMessage(m.chat, {
-                                text: `🔇 @${m.sender.split('@')[0]} está silenciado y no puede enviar mensajes.${timeLeft}`,
-                                mentions: [m.sender]
-                            }).catch(() => null)
-                            
-                            lastNotification[key] = now
-                        } catch (e) {
-                            console.error('Error en notificación de mute:', e)
-                        }
-                    }
-                    
-                    return
-                }
-            }
-        }
-        // ============================================
-
+        
         if (typeof m.text !== "string") m.text = ""
-
-        // ACTUALIZAR NOMBRE DEL USUARIO
+        
+        // Actualizar nombre del usuario
         try {
             const newName = m.pushName || await this.getName(m.sender)
             if (typeof newName === "string" && newName.trim() && newName !== user.name) {
                 user.name = newName
             }
         } catch {}
-
-        // VERIFICACIONES DE PERMISOS
+        
+        // Verificaciones de permisos
         const isROwner = [...global.owner].map(v => v.replace(/\D/g, "") + "@s.whatsapp.net").includes(m.sender)
         const isOwner = isROwner || m.fromMe
         const isPrems = isROwner || global.prems.map(v => v.replace(/\D/g, "") + "@s.whatsapp.net").includes(m.sender) || user.premium
         const isOwners = [this.user.jid, ...global.owner.map(v => v + "@s.whatsapp.net")].includes(m.sender)
-
+        
         if (settings.self && !isOwners) return
         if (settings.gponly && !isOwners && !m.chat.endsWith('g.us') && 
             !/code|p|ping|qr|estado|status|infobot|botinfo|report|reportar|invite|join|logout|suggest|help|menu/gim.test(m.text)) return
-
-        // SISTEMA DE COLA DE MENSAJES
+        
+        // Sistema de cola de mensajes
         if (global.opts?.queque && m.text && !isPrems) {
             const queue = this.msgqueue
             queue.push(m.id || m.key.id)
@@ -162,48 +77,41 @@ export async function handler(chatUpdate) {
                 if (index > -1) queue.splice(index, 1)
             }, 5000)
         }
-
+        
         if (m.isBaileys) return
         m.exp += Math.ceil(Math.random() * 10)
-
-        // DETECCIÓN DE ADMINISTRADORES
+        
+        // Detección de administradores optimizada
         let groupMetadata = {}
         let participants = []
-
+        
         if (m.isGroup) {
-            try {
-                if (global.cachedGroupMetadata) {
-                    groupMetadata = await global.cachedGroupMetadata(m.chat).catch(() => null)
-                }
-                if (!groupMetadata) {
-                    groupMetadata = await this.groupMetadata(m.chat).catch(() => null) || {}
-                }
-                participants = Array.isArray(groupMetadata?.participants) ? groupMetadata.participants : []
-            } catch (e) {
-                console.error('Error obteniendo metadata del grupo:', e)
-            }
+            groupMetadata = global.cachedGroupMetadata ? 
+                await global.cachedGroupMetadata(m.chat).catch(() => null) : 
+                await this.groupMetadata(m.chat).catch(() => null) || {}
+            participants = Array.isArray(groupMetadata?.participants) ? groupMetadata.participants : []
         }
-
+        
         const decodeJid = (j) => this.decodeJid(j)
         const normJid = (j) => jidNormalizedUser(decodeJid(j))
-
+        
         const userGroup = m.isGroup ? participants.find(p => areJidsSameUser(normJid(p.jid || p.id), normJid(m.sender))) || {} : {}
         const botGroup = m.isGroup ? participants.find(p => areJidsSameUser(normJid(p.jid || p.id), normJid(this.user.jid))) || {} : {}
-
+        
         const isRAdmin = userGroup?.admin === 'superadmin'
         const isAdmin = isRAdmin || userGroup?.admin === 'admin' || userGroup?.admin === true
         const isBotAdmin = botGroup?.admin === 'admin' || botGroup?.admin === 'superadmin' || botGroup?.admin === true
-
-        // PROCESAR PLUGINS
+        
+        // Procesar plugins
         const ___dirname = path.join(path.dirname(fileURLToPath(import.meta.url)), "./plugins")
-
+        
         for (const name in global.plugins) {
             const plugin = global.plugins[name]
             if (!plugin || plugin.disabled) continue
-
+            
             const __filename = join(___dirname, name)
-
-            // PLUGIN.ALL
+            
+            // Ejecutar plugin.all si existe
             if (typeof plugin.all === "function") {
                 try {
                     await plugin.all.call(this, m, { chatUpdate, __dirname: ___dirname, __filename, user, chat, settings })
@@ -211,13 +119,14 @@ export async function handler(chatUpdate) {
                     console.error(err)
                 }
             }
-
+            
+            // Saltar plugins admin si no hay restrict
             if (!global.opts?.restrict && plugin.tags?.includes("admin")) continue
-
-            // MANEJO DE PREFIJOS
+            
+            // Manejo de prefijos
             const pluginPrefix = plugin.customPrefix || conn.prefix || global.prefix
             let match = null
-
+            
             if (pluginPrefix instanceof RegExp) {
                 match = [pluginPrefix.exec(m.text), pluginPrefix]
             } else if (Array.isArray(pluginPrefix)) {
@@ -229,10 +138,10 @@ export async function handler(chatUpdate) {
                 const regex = new RegExp(pluginPrefix.replace(/[|\\{}()[\]^$+*?.]/g, "\\$&"))
                 match = [regex.exec(m.text), regex]
             }
-
+            
             if (!match) continue
-
-            // BEFORE HOOK
+            
+            // Ejecutar before hook
             if (typeof plugin.before === "function") {
                 if (await plugin.before.call(this, m, {
                     match, conn: this, participants, groupMetadata,
@@ -241,18 +150,18 @@ export async function handler(chatUpdate) {
                     __dirname: ___dirname, __filename, user, chat, settings
                 })) continue
             }
-
+            
             if (typeof plugin !== "function") continue
-
-            // DETERMINAR PREFIJO USADO
+            
+            // Determinar prefijo usado
             let usedPrefix = (match[0] || "")[0] || (global.sinprefix ? '' : undefined)
             if (usedPrefix === undefined) continue
-
+            
             const noPrefix = m.text.replace(usedPrefix, "")
             let [command, ...args] = noPrefix.trim().split(" ").filter(v => v)
             command = (command || "").toLowerCase()
-
-            // VERIFICAR SI EL COMANDO COINCIDE
+            
+            // Verificar si el comando coincide
             let isAccept = false
             if (plugin.command instanceof RegExp) {
                 isAccept = plugin.command.test(command)
@@ -262,30 +171,30 @@ export async function handler(chatUpdate) {
             } else if (typeof plugin.command === "string") {
                 isAccept = plugin.command === command
             }
-
+            
             if (!isAccept) continue
-
+            
             m.plugin = name
             global.comando = command
             user.commands = (user.commands || 0) + 1
-
-            // VERIFICAR BANEOS
+            
+            // Verificar baneos
             if (chat.isBanned && !isROwner) {
                 const aviso = `⚠️ El bot *${global.botname}* está desactivado en este grupo.\n\n> 🔹 Un *administrador* puede activarlo usando:\n> » *${usedPrefix}bot on*`
                 await m.reply(aviso)
                 return
             }
-
+            
             if (user.banned && !isROwner) {
                 const mensaje = `🚫 *Acceso Denegado*\nꕙ Has sido *baneado/a* y no puedes usar comandos.\n\n> ⚡ *Razón:* ${user.bannedReason}`
                 await m.reply(mensaje)
                 return
             }
-
-            // VERIFICAR PERMISOS DEL COMANDO
+            
+            // Verificar permisos del comando
             const adminMode = chat.modoadmin
             const requiresAdmin = plugin.botAdmin || plugin.admin || plugin.group
-
+            
             if (adminMode && !isOwner && m.isGroup && !isAdmin && requiresAdmin) return
             if (plugin.rowner && plugin.owner && !(isROwner || isOwner)) return global.dfail("owner", m, this)
             if (plugin.rowner && !isROwner) return global.dfail("rowner", m, this)
@@ -295,11 +204,11 @@ export async function handler(chatUpdate) {
             if (plugin.botAdmin && !isBotAdmin) return global.dfail("botAdmin", m, this)
             if (plugin.admin && !isAdmin) return global.dfail("admin", m, this)
             if (plugin.private && m.isGroup) return global.dfail("private", m, this)
-
+            
             m.isCommand = true
             m.exp += plugin.exp ? parseInt(plugin.exp) : 10
-
-            // EJECUTAR EL PLUGIN
+            
+            // Ejecutar el plugin
             try {
                 await plugin.call(this, m, {
                     match, usedPrefix, noPrefix, args,
@@ -332,18 +241,18 @@ export async function handler(chatUpdate) {
     } catch (err) {
         console.error(err)
     } finally {
-        // LIMPIAR COLA DE MENSAJES
+        // Limpiar cola de mensajes
         if (global.opts?.queque && m?.text) {
             const index = this.msgqueue.indexOf(m.id || m.key.id)
             if (index > -1) this.msgqueue.splice(index, 1)
         }
-
-        // ACTUALIZAR EXPERIENCIA DEL USUARIO
+        
+        // Actualizar experiencia del usuario
         if (m?.sender && global.db.data.users[m.sender]) {
             global.db.data.users[m.sender].exp += m.exp || 0
         }
-
-        // IMPRIMIR MENSAJE
+        
+        // Imprimir mensaje
         try {
             if (!global.opts?.noprint) {
                 await import("./lib/print.js").then(mod => mod.default(m, this))
@@ -354,25 +263,7 @@ export async function handler(chatUpdate) {
     }
 }
 
-// FUNCIÓN PARA FORMATEAR TIEMPO DE MUTE
-function formatMuteTime(ms) {
-    if (ms < 1000) return '0 segundos'
-
-    const seconds = Math.floor((ms / 1000) % 60)
-    const minutes = Math.floor((ms / (1000 * 60)) % 60)
-    const hours = Math.floor((ms / (1000 * 60 * 60)) % 24)
-    const days = Math.floor(ms / (1000 * 60 * 60 * 24))
-
-    const parts = []
-    if (days > 0) parts.push(`${days}d`)
-    if (hours > 0) parts.push(`${hours}h`)
-    if (minutes > 0) parts.push(`${minutes}m`)
-    if (seconds > 0) parts.push(`${seconds}s`)
-
-    return parts.join(' ') || '0s'
-}
-
-// FUNCIÓN DE FALLO
+// Función de fallo optimizada
 global.dfail = (type, m, conn) => {
     const messages = {
         rowner: `💠 *Acceso denegado*\nEl comando *${global.comando}* solo puede ser usado por los *creadores del bot*.`,
@@ -384,17 +275,11 @@ global.dfail = (type, m, conn) => {
         botAdmin: `🤖 *Necesito permisos*\nPara ejecutar *${global.comando}*, el bot debe ser *administrador del grupo*.`,
         restrict: `⛔ *Funcionalidad desactivada*\nEsta característica está *temporalmente deshabilitada*.`
     }
-
-    if (messages[type]) {
-        conn.reply(m.chat, messages[type], m).then(_ => {
-            try {
-                m.react?.('✖️')
-            } catch {}
-        })
-    }
+    
+    if (messages[type]) conn.reply(m.chat, messages[type], m).then(_ => m.react?.('✖️'))
 }
 
-// WATCH PARA RECARGAR AUTOMÁTICAMENTE
+// Watch para recargar automáticamente
 let file = global.__filename(import.meta.url, true)
 watchFile(file, async () => {
     unwatchFile(file)
