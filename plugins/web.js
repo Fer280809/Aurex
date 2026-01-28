@@ -3,24 +3,36 @@ let handler = async (m, { conn }) => {
   let webUrl = 'https://study-bot.xo.je/';
 
   try {
-    await conn.sendMessage(m.chat, {
-      image: { url: mediaUrl },
-      caption: '『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡\n\nToca el botón para visitar mi web:',
-      footer: "Powered by Asta-Bot",
-      templateButtons: [
-        {
-          index: 1,
-          urlButton: {
-            displayText: '🌐 Este es mi página web',
-            url: webUrl
-          }
+    // Enviar imagen con botón URL usando templateMessage
+    await conn.relayMessage(m.chat, {
+      templateMessage: {
+        hydratedTemplate: {
+          imageMessage: {
+            url: mediaUrl,
+            caption: '『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡\n\n👇 Toca el botón para visitar:',
+            jpegThumbnail: null
+          },
+          hydratedFooterText: "Powered by Asta-Bot",
+          hydratedButtons: [
+            {
+              urlButton: {
+                displayText: '🌐 Este es mi página web',
+                url: webUrl
+              }
+            }
+          ]
         }
-      ]
+      }
     }, { quoted: m });
 
   } catch (e) {
     console.error('Error:', e);
-    m.reply('Error al enviar el mensaje');
+    
+    // Fallback: enviar imagen normal con link en caption
+    await conn.sendMessage(m.chat, {
+      image: { url: mediaUrl },
+      caption: `『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡\n\n🌐 Mi página web:\n${webUrl}`
+    }, { quoted: m });
   }
 };
 
