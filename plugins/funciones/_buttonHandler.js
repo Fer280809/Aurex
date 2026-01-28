@@ -298,4 +298,3 @@ export async function before(m, { conn, usedPrefix }) {
     return true; // DETENER propagación incluso con error
   }
 }
-[file content end]
