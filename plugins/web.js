@@ -1,75 +1,44 @@
 let handler = async (m, { conn }) => {
-  let mediaUrl = 'https://raw.githubusercontent.com/Fer280809/Asta_bot/main/lib/catalogo.jpg';
   let webUrl = 'https://study-bot.xo.je/';
-
+  
   try {
-    // Primero descargamos la imagen
-    const axios = (await import('axios')).default;
-    let response = await axios.get(mediaUrl, { responseType: 'arraybuffer' });
-    let imageBuffer = Buffer.from(response.data, 'binary');
-
-    // Enviar mensaje con botones en el formato correcto
+    // Enviar mensaje con botón de URL directa (WhatsApp lo maneja automáticamente)
     await conn.sendMessage(m.chat, {
-      image: imageBuffer,
-      caption: '『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡\n\n*Visita mi página web oficial*',
-      buttons: [
+      text: '『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡\n\n*Haz clic en el botón para visitar mi página web:*',
+      templateButtons: [
         {
-          buttonId: `!link ${webUrl}`,
-          buttonText: { displayText: '🌐 Abrir Sitio Web' },
-          type: 1
+          index: 1,
+          urlButton: {
+            displayText: '🌐 Visitar Sitio Web',
+            url: webUrl
+          }
         },
         {
-          buttonId: `!menu`,
-          buttonText: { displayText: '📱 Volver al Menú' },
-          type: 1
+          index: 2,
+          quickReplyButton: {
+            displayText: '📱 Más información',
+            id: 'info'
+          }
         }
-      ],
-      headerType: 4
-    }, { quoted: m });
-
-    console.log('✅ Botón web enviado correctamente');
-
-  } catch (e) {
-    console.error('❌ Error en handler web:', e);
-    
-    // Fallback: enviar mensaje simple con el enlace
-    await conn.sendMessage(m.chat, {
-      text: `『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡\n\n🌐 *Mi página web:*\n${webUrl}\n\n_Copia y pega este enlace en tu navegador_`,
-      contextInfo: {
-        externalAdReply: {
-          title: 'Asta-Bot Website',
-          body: 'Haz clic aquí para visitar',
-          thumbnailUrl: 'https://raw.githubusercontent.com/Fer280809/Asta_bot/main/lib/catalogo.jpg',
-          sourceUrl: webUrl,
-          mediaType: 1
-        }
-      }
-    }, { quoted: m });
-  }
-};
-
-handler.help = ['web', 'pagina', 'website'];
-handler.tags = ['main'];
-handler.command = /^(web|página|pagina|website|sitio)$/i;
-
-// Si quieres que el botón del link funcione, necesitarás un handler adicional:
-const linkHandler = async (m, { conn }) => {
-  const url = m.text.split(' ')[1];
-  
-  if (url && url.startsWith('http')) {
-    // Enviar mensaje con el enlace directo
-    await conn.sendMessage(m.chat, {
-      text: `🌐 *Enlace directo:*\n${url}\n\n_Puedes copiar este enlace o pedir al bot que te lo abra si está en un dispositivo móvil._`,
-      templateButtons: [
-        { urlButton: { displayText: '🔗 Abrir Enlace', url: url } }
       ]
     }, { quoted: m });
+
+  } catch (e) {
+    console.error('Error:', e);
+    // Fallback simple
+    await m.reply(`『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡\n\n🌐 *Mi página web:* ${webUrl}`);
   }
 };
 
-linkHandler.help = ['link <url>'];
-linkHandler.tags = ['util'];
-linkHandler.command = /^link$/i;
+handler.help = ['web'];
+handler.tags = ['main'];
+handler.command = ['web', 'pagina', 'website'];
 
-// Exportar ambos handlers
-export { handler as default, linkHandler };
+// Handler para el botón rápido de información
+const quickReplyHandler = async (m, { conn }) => {
+  if (m.message?.buttonsResponseMessage?.selectedButtonId === 'info') {
+    await m.reply('*Información del Bot:*\n\nSoy Asta-Bot, un bot multifunción creado para ayudarte. Visita mi web para ver todas mis funciones.');
+  }
+};
+
+export { handler as default, quickReplyHandler };
