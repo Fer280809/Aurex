@@ -3,36 +3,33 @@ let handler = async (m, { conn }) => {
   let webUrl = 'https://study-bot.xo.je/';
 
   try {
-    // Enviar imagen con botón URL usando templateMessage
-    await conn.relayMessage(m.chat, {
-      templateMessage: {
-        hydratedTemplate: {
-          imageMessage: {
-            url: mediaUrl,
-            caption: '『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡\n\n👇 Toca el botón para visitar:',
-            jpegThumbnail: null
-          },
-          hydratedFooterText: "Powered by Asta-Bot",
-          hydratedButtons: [
-            {
-              urlButton: {
-                displayText: '🌐 Este es mi página web',
-                url: webUrl
-              }
-            }
-          ]
+    // Descargar imagen primero
+    const axios = require('axios');
+    let imageBuffer = await axios.get(mediaUrl, { 
+      responseType: 'arraybuffer',
+      timeout: 10000 
+    }).then(res => Buffer.from(res.data, 'binary'));
+
+    // Enviar como interactiveMessage
+    await conn.sendMessage(m.chat, {
+      image: imageBuffer,
+      caption: '『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡',
+      footer: 'Toca el botón de abajo 👇',
+      buttons: [
+        {
+          buttonId: `link_${webUrl}`,
+          buttonText: { displayText: '🌐 Este es mi página web' },
+          type: 1,
+          url: webUrl
         }
-      }
+      ],
+      headerType: 4,
+      viewOnce: true
     }, { quoted: m });
 
   } catch (e) {
     console.error('Error:', e);
-    
-    // Fallback: enviar imagen normal con link en caption
-    await conn.sendMessage(m.chat, {
-      image: { url: mediaUrl },
-      caption: `『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡\n\n🌐 Mi página web:\n${webUrl}`
-    }, { quoted: m });
+    m.reply('❌ Error al cargar la imagen');
   }
 };
 
