@@ -11,26 +11,6 @@ export async function before(m, { conn, usedPrefix }) {
   console.log('=== BOTÓN INTERCEPTADO ===');
   console.log('Botón seleccionado:', selection);
 
-  // Enviar reacción de emoji como confirmación visual
-  try {
-    // Emojis para confirmación de botón presionado
-    const buttonEmojis = ['✅', '👆', '🔘', '🟢', '⚡', '✨', '🎯', '👍', '🔄', '📥'];
-    const reactionEmoji = buttonEmojis[Math.floor(Math.random() * buttonEmojis.length)];
-    
-    // Enviar reacción al mensaje original del botón
-    await conn.sendMessage(m.chat, {
-      react: {
-        text: reactionEmoji,
-        key: m.key
-      }
-    });
-    
-    console.log('✅ Reacción enviada:', reactionEmoji);
-  } catch (e) {
-    console.log('⚠️ Error enviando reacción:', e.message);
-    // No es crítico, continuamos
-  }
-
   // Extraer el comando (quitar el punto si existe)
   let cmd = selection.replace(/^\./, '');
   console.log('Comando a buscar:', cmd);
@@ -121,18 +101,7 @@ export async function before(m, { conn, usedPrefix }) {
 
   if (!pluginFound) {
     console.log('⚠️ No se encontró plugin para:', cmd);
-    
-    // Enviar reacción de error si no se encuentra el comando
-    try {
-      await conn.sendMessage(m.chat, {
-        react: {
-          text: '❌',
-          key: m.key
-        }
-      });
-    } catch (e) {}
-    
-    return true; // DETENER propagación
+    return false; // NO encontrado, dejar que el handler principal lo intente
   }
 
   console.log('✅ Plugin encontrado:', pluginName);
@@ -141,95 +110,35 @@ export async function before(m, { conn, usedPrefix }) {
 
   // Verificar si requiere ser owner
   if (pluginFound.rowner && !isROwner) {
-    // Reacción de acceso denegado
-    try {
-      await conn.sendMessage(m.chat, {
-        react: {
-          text: '🚫',
-          key: m.key
-        }
-      });
-    } catch (e) {}
-    
     await m.reply(`🎅 *¡ACCESO DENEGADO!*\n\nEste comando es exclusivo para los creadores del bot.`);
     return true; // DETENER propagación
   }
 
   if (pluginFound.owner && !isOwner) {
-    // Reacción de acceso denegado
-    try {
-      await conn.sendMessage(m.chat, {
-        react: {
-          text: '🚫',
-          key: m.key
-        }
-      });
-    } catch (e) {}
-    
     await m.reply(`🎁 *¡RESERVADO PARA OWNERS!*\n\nSolo los desarrolladores del bot pueden usar este comando.`);
     return true; // DETENER propagación
   }
 
   // Verificar si requiere admin
   if (pluginFound.admin && !isAdmin) {
-    // Reacción de permiso denegado
-    try {
-      await conn.sendMessage(m.chat, {
-        react: {
-          text: '⚠️',
-          key: m.key
-        }
-      });
-    } catch (e) {}
-    
     await m.reply(`⚠️ *¡PERMISO DENEGADO!*\n\nEste comando solo puede ser usado por administradores del grupo.`);
     return true; // DETENER propagación
   }
 
   // Verificar si requiere que el bot sea admin
   if (pluginFound.botAdmin && !isBotAdmin) {
-    // Reacción de bot sin permisos
-    try {
-      await conn.sendMessage(m.chat, {
-        react: {
-          text: '🤖',
-          key: m.key
-        }
-      });
-    } catch (e) {}
-    
     await m.reply(`🤖 *¡BOT SIN PERMISOS!*\n\nNecesito ser administrador del grupo para ejecutar este comando.`);
     return true; // DETENER propagación
   }
 
   // Verificar si solo funciona en grupos
   if (pluginFound.group && !m.isGroup) {
-    // Reacción de error
-    try {
-      await conn.sendMessage(m.chat, {
-        react: {
-          text: '👥',
-          key: m.key
-        }
-      });
-    } catch (e) {}
-    
     await m.reply(`👥 *¡SOLO GRUPOS!*\n\nEste comando solo puede usarse en grupos.`);
     return true; // DETENER propagación
   }
 
   // Verificar si solo funciona en privado
   if (pluginFound.private && m.isGroup) {
-    // Reacción de error
-    try {
-      await conn.sendMessage(m.chat, {
-        react: {
-          text: '🔒',
-          key: m.key
-        }
-      });
-    } catch (e) {}
-    
     await m.reply(`🔒 *¡SOLO PRIVADO!*\n\nEste comando solo puede usarse en chat privado.`);
     return true; // DETENER propagación
   }
@@ -237,16 +146,6 @@ export async function before(m, { conn, usedPrefix }) {
   // ============ EJECUTAR PLUGIN ============
   try {
     console.log('🚀 Ejecutando plugin desde botón...');
-
-    // Reacción de procesando (opcional, si quieres doble confirmación)
-    try {
-      await conn.sendMessage(m.chat, {
-        react: {
-          text: '⏳',
-          key: m.key
-        }
-      });
-    } catch (e) {}
 
     await pluginFound.call(this, m, {
       conn,
@@ -266,34 +165,10 @@ export async function before(m, { conn, usedPrefix }) {
     });
 
     console.log('✅ Plugin ejecutado correctamente');
-    
-    // Reacción de éxito (opcional)
-    try {
-      setTimeout(async () => {
-        await conn.sendMessage(m.chat, {
-          react: {
-            text: '✅',
-            key: m.key
-          }
-        });
-      }, 500);
-    } catch (e) {}
-    
     return true; // DETENER propagación - comando ejecutado exitosamente
 
   } catch (e) {
     console.error('❌ Error ejecutando plugin:', e);
-    
-    // Reacción de error
-    try {
-      await conn.sendMessage(m.chat, {
-        react: {
-          text: '❌',
-          key: m.key
-        }
-      });
-    } catch (e) {}
-    
     await m.reply(`❌ *Error al ejecutar el comando*\n\n${e.message || e}`);
     return true; // DETENER propagación incluso con error
   }
