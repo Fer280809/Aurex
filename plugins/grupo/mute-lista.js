@@ -70,7 +70,7 @@ const handler = async (m, { isOwner, isAdmin, conn, participants, args, command 
   }
 }
 
-// Función para formatear tiempo (misma que en mute.js)
+// FUNCIÓN PARA FORMATEAR TIEMPO (AGREGAR ESTO AL FINAL DEL ARCHIVO)
 function formatTime(ms) {
   const seconds = Math.floor(ms / 1000)
   const minutes = Math.floor(seconds / 60)
