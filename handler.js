@@ -50,71 +50,99 @@ export async function handler(chatUpdate) {
         }
 
         // ===============================
-        // SISTEMA DE VERIFICACIÓN DE MUTE
+        // SISTEMA DE VERIFICACIÓN DE MUTE MEJORADO
         // ===============================
-        if (m.chat.endsWith('@g.us') && !m.isBaileys && m.sender) {
+        if (m.chat && m.chat.endsWith('@g.us') && !m.isBaileys && m.sender && !m.key.fromMe) {
             // Asegurar que existe la estructura
             if (!chat.mutes) chat.mutes = {}
-
+            
             const muteData = chat.mutes[m.sender]
-
+            
             if (muteData) {
                 const now = Date.now()
-
-                // Verificar si el mute ha expirado
-                if (muteData.expiresAt && muteData.expiresAt < now) {
+                
+                // Verificar si el mute ha expirado (solo si tiene tiempo límite)
+                let shouldDeleteMute = false
+                if (muteData.expiresAt) {
+                    if (muteData.expiresAt <= now) {
+                        shouldDeleteMute = true
+                    }
+                }
+                
+                if (shouldDeleteMute) {
+                    // Eliminar mute expirado
                     delete chat.mutes[m.sender]
                 } else {
                     // USUARIO ESTÁ MUTEADO - Bloquear mensaje
-
+                    
                     // Intentar eliminar el mensaje si el bot es admin
                     try {
                         if (m.isGroup) {
-                            const groupMetadata = global.cachedGroupMetadata ? 
-                                await global.cachedGroupMetadata(m.chat).catch(() => null) : 
-                                await this.groupMetadata(m.chat).catch(() => null) || {}
-                            const participants = Array.isArray(groupMetadata?.participants) ? groupMetadata.participants : []
-                            const botGroup = participants.find(p => areJidsSameUser(p.id, this.user.jid)) || {}
-                            const isBotAdmin = botGroup?.admin === 'admin' || botGroup?.admin === 'superadmin' || botGroup?.admin === true
-
-                            if (isBotAdmin) {
-                                await this.sendMessage(m.chat, {
-                                    delete: {
-                                        remoteJid: m.chat,
-                                        fromMe: false,
-                                        id: m.key.id,
-                                        participant: m.sender
+                            let groupMetadata
+                            try {
+                                if (global.cachedGroupMetadata) {
+                                    groupMetadata = await global.cachedGroupMetadata(m.chat).catch(() => null)
+                                }
+                                if (!groupMetadata) {
+                                    groupMetadata = await this.groupMetadata(m.chat).catch(() => null)
+                                }
+                            } catch (e) {
+                                console.error('Error obteniendo metadata:', e)
+                            }
+                            
+                            if (groupMetadata) {
+                                const participants = Array.isArray(groupMetadata.participants) ? groupMetadata.participants : []
+                                const botGroup = participants.find(p => {
+                                    try {
+                                        return areJidsSameUser(p.id, this.user.jid)
+                                    } catch {
+                                        return false
                                     }
-                                }).catch(() => null)
+                                }) || {}
+                                
+                                const isBotAdmin = botGroup.admin === 'admin' || botGroup.admin === 'superadmin' || botGroup.admin === true
+                                
+                                if (isBotAdmin) {
+                                    await this.sendMessage(m.chat, {
+                                        delete: {
+                                            remoteJid: m.chat,
+                                            fromMe: false,
+                                            id: m.key.id,
+                                            participant: m.sender
+                                        }
+                                    }).catch(() => null)
+                                }
                             }
                         }
                     } catch (e) {
-                        // Ignorar errores de eliminación
+                        console.error('Error eliminando mensaje muteado:', e)
                     }
-
-                    // Notificar al usuario (cada 30 segundos máximo para evitar spam)
-                    const lastNotification = global.muteNotif = global.muteNotif || {}
+                    
+                    // Notificar al usuario (con límite de tiempo para evitar spam)
+                    const lastNotification = global.muteNotifCache = global.muteNotifCache || {}
                     const key = `${m.chat}_${m.sender}`
-
-                    if (!lastNotification[key] || (now - lastNotification[key] > 30000)) {
+                    
+                    if (!lastNotification[key] || (now - lastNotification[key] > 30000)) { // 30 segundos
                         let timeLeft = ''
                         if (muteData.expiresAt) {
                             const remaining = muteData.expiresAt - now
-                            timeLeft = `\n⏱️ Tiempo restante: ${formatMuteTime(remaining)}`
+                            if (remaining > 0) {
+                                timeLeft = `\n⏳ Tiempo restante: ${formatMuteTime(remaining)}`
+                            }
                         }
-
+                        
                         try {
                             await this.sendMessage(m.chat, {
                                 text: `🔇 @${m.sender.split('@')[0]} está silenciado y no puede enviar mensajes.${timeLeft}`,
                                 mentions: [m.sender]
                             }).catch(() => null)
-
+                            
                             lastNotification[key] = now
                         } catch (e) {
-                            // Ignorar errores de notificación
+                            console.error('Error en notificación de mute:', e)
                         }
                     }
-
+                    
                     // DETENER PROCESAMIENTO DEL MENSAJE
                     return
                 }
@@ -162,17 +190,37 @@ export async function handler(chatUpdate) {
         let participants = []
 
         if (m.isGroup) {
-            groupMetadata = global.cachedGroupMetadata ? 
-                await global.cachedGroupMetadata(m.chat).catch(() => null) : 
-                await this.groupMetadata(m.chat).catch(() => null) || {}
-            participants = Array.isArray(groupMetadata?.participants) ? groupMetadata.participants : []
+            try {
+                if (global.cachedGroupMetadata) {
+                    groupMetadata = await global.cachedGroupMetadata(m.chat).catch(() => null)
+                }
+                if (!groupMetadata) {
+                    groupMetadata = await this.groupMetadata(m.chat).catch(() => null) || {}
+                }
+                participants = Array.isArray(groupMetadata?.participants) ? groupMetadata.participants : []
+            } catch (e) {
+                console.error('Error obteniendo metadata del grupo:', e)
+            }
         }
 
         const decodeJid = (j) => this.decodeJid(j)
         const normJid = (j) => jidNormalizedUser(decodeJid(j))
 
-        const userGroup = m.isGroup ? participants.find(p => areJidsSameUser(normJid(p.jid || p.id), normJid(m.sender))) || {} : {}
-        const botGroup = m.isGroup ? participants.find(p => areJidsSameUser(normJid(p.jid || p.id), normJid(this.user.jid))) || {} : {}
+        const userGroup = m.isGroup ? participants.find(p => {
+            try {
+                return areJidsSameUser(normJid(p.jid || p.id), normJid(m.sender))
+            } catch {
+                return false
+            }
+        }) || {} : {}
+        
+        const botGroup = m.isGroup ? participants.find(p => {
+            try {
+                return areJidsSameUser(normJid(p.jid || p.id), normJid(this.user.jid))
+            } catch {
+                return false
+            }
+        }) || {} : {}
 
         const isRAdmin = userGroup?.admin === 'superadmin'
         const isAdmin = isRAdmin || userGroup?.admin === 'admin' || userGroup?.admin === true
@@ -349,12 +397,12 @@ function formatMuteTime(ms) {
     const days = Math.floor(ms / (1000 * 60 * 60 * 24))
 
     const parts = []
-    if (days > 0) parts.push(`${days}d`)
-    if (hours > 0) parts.push(`${hours}h`)
-    if (minutes > 0) parts.push(`${minutes}m`)
-    if (seconds > 0) parts.push(`${seconds}s`)
+    if (days > 0) parts.push(`${days} día${days > 1 ? 's' : ''}`)
+    if (hours > 0) parts.push(`${hours} hora${hours > 1 ? 's' : ''}`)
+    if (minutes > 0) parts.push(`${minutes} minuto${minutes > 1 ? 's' : ''}`)
+    if (seconds > 0) parts.push(`${seconds} segundo${seconds > 1 ? 's' : ''}`)
 
-    return parts.join(' ') || '0s'
+    return parts.join(', ') || '0 segundos'
 }
 
 // Función de fallo optimizada
@@ -370,7 +418,31 @@ global.dfail = (type, m, conn) => {
         restrict: `⛔ *Funcionalidad desactivada*\nEsta característica está *temporalmente deshabilitada*.`
     }
 
-    if (messages[type]) conn.reply(m.chat, messages[type], m).then(_ => m.react?.('✖️'))
+    if (messages[type]) {
+        conn.reply(m.chat, messages[type], m).then(_ => {
+            try {
+                m.react?.('✖️')
+            } catch {}
+        })
+    }
+}
+
+// Función auxiliar para formatear tiempo (usada en mute/unmute)
+function formatTime(ms) {
+    if (ms < 1000) return '0 segundos'
+
+    const seconds = Math.floor((ms / 1000) % 60)
+    const minutes = Math.floor((ms / (1000 * 60)) % 60)
+    const hours = Math.floor((ms / (1000 * 60 * 60)) % 24)
+    const days = Math.floor(ms / (1000 * 60 * 60 * 24))
+
+    const parts = []
+    if (days > 0) parts.push(`${days} día${days > 1 ? 's' : ''}`)
+    if (hours > 0) parts.push(`${hours} hora${hours > 1 ? 's' : ''}`)
+    if (minutes > 0) parts.push(`${minutes} minuto${minutes > 1 ? 's' : ''}`)
+    if (seconds > 0) parts.push(`${seconds} segundo${seconds > 1 ? 's' : ''}`)
+
+    return parts.join(', ') || '0 segundos'
 }
 
 // Watch para recargar automáticamente
