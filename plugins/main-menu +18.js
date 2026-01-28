@@ -107,6 +107,6 @@ Me llamo『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡
 
 handler.help = ['menu'];
 handler.tags = ['main'];
-handler.command = ['menú', 'menu', 'help'];
+handler.command = ['menú+', 'menu+', 'help+', 'menu18'];
 
 export default handler;
