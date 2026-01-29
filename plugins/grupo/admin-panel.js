@@ -1,587 +1,364 @@
-// plugins/admin-panel.js - VERSIÓN CORREGIDA
-import { areJidsSameUser } from '@whiskeysockets/baileys'
+import moment from 'moment-timezone'
 
-// ===============================
-// CONFIGURACIÓN GLOBAL
-// ===============================
-global.adminCooldowns = global.adminCooldowns || new Map()
-global.pendingActions = global.pendingActions || new Map()
-const COOLDOWN_TIME = 10000 // 10 segundos
-const MAX_MASS_KICK = 20 // Límite de seguridad
-
-// ===============================
-// UTILIDADES MEJORADAS
-// ===============================
-class AdminUtils {
-  static isOnCooldown(userId, command) {
-    const key = `${userId}:${command}`
-    const now = Date.now()
-    
-    if (global.adminCooldowns.has(key)) {
-      const lastTime = global.adminCooldowns.get(key)
-      if (now - lastTime < COOLDOWN_TIME) {
-        return Math.ceil((COOLDOWN_TIME - (now - lastTime)) / 1000)
-      }
-    }
-    
-    global.adminCooldowns.set(key, now)
-    setTimeout(() => global.adminCooldowns.delete(key), COOLDOWN_TIME + 1000)
-    return false
-  }
-
-  static async getTargetUser(m, args, participants) {
-    // 1. Mención directa
-    if (m.mentionedJid?.[0]) {
-      return m.mentionedJid[0]
-    }
-    
-    // 2. Mensaje citado
-    if (m.quoted?.sender) {
-      return m.quoted.sender
-    }
-    
-    // 3. Número proporcionado
-    if (args[0]) {
-      const num = args[0].replace(/\D/g, '')
-      if (num) {
-        const jid = num + '@s.whatsapp.net'
-        // Verificar si el usuario está en el grupo
-        const inGroup = participants.some(p => areJidsSameUser(p.id, jid))
-        return inGroup ? jid : null
-      }
-    }
-    
-    return null
-  }
-
-  static formatBox(title, content) {
-    const topLine = '╭' + '─'.repeat(title.length + 6) + '╮'
-    const bottomLine = '╰' + '─'.repeat(title.length + 6) + '╯'
-    
-    return `${topLine}
-│  📌 ${title}  │
-│${' '.repeat(title.length + 8)}│
-${content.split('\n').map(line => `│  ${line.padEnd(title.length + 4)}  │`).join('\n')}
-│${' '.repeat(title.length + 8)}│
-${bottomLine}`
-  }
-
-  static async delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms))
-  }
-
-  static formatUserList(users, max = 5) {
-    if (!users.length) return '│  ⚠️  Sin usuarios  ⚠️  │'
-    
-    const limited = users.slice(0, max)
-    return limited.map((user, i) => {
-      const num = user.split('@')[0]
-      return `│  ${i + 1}. ${num.slice(-8).padStart(8, '•')}  │`
-    }).join('\n') + (users.length > max ? `\n│  ... y ${users.length - max} más  │` : '')
-  }
-}
-
-// ===============================
-// MANEJO DE ACCIONES PENDIENTES
-// ===============================
-class PendingActionManager {
-  static setAction(userId, action) {
-    global.pendingActions.set(userId, {
-      ...action,
-      timestamp: Date.now()
-    })
-    
-    // Auto-limpiar después de 2 minutos
-    setTimeout(() => {
-      if (global.pendingActions.get(userId)?.id === action.id) {
-        global.pendingActions.delete(userId)
-      }
-    }, 120000)
-  }
-
-  static getAction(userId) {
-    const action = global.pendingActions.get(userId)
-    if (!action) return null
-    
-    if (Date.now() - action.timestamp > 120000) {
-      global.pendingActions.delete(userId)
-      return null
-    }
-    
-    return action
-  }
-
-  static clearAction(userId) {
-    global.pendingActions.delete(userId)
-  }
-}
-
-// ===============================
-// HANDLER PRINCIPAL
-// ===============================
-const handler = async (m, {
-  conn,
-  args,
-  usedPrefix,
-  command,
-  participants,
-  groupMetadata,
-  isAdmin,
-  isOwner,
-  isBotAdmin
-}) => {
-  // ===============================
-  // VALIDACIONES INICIALES
-  // ===============================
-  if (!m.isGroup) {
-    return m.reply('🚫 *Este comando solo funciona en grupos*')
-  }
-
-  if (!isAdmin && !isOwner) {
-    return m.reply('⛔ *Solo administradores pueden usar este comando*')
-  }
-
-  if (!isBotAdmin) {
-    return m.reply('🤖 *Necesito ser administrador para ejecutar estas acciones*')
-  }
-
-  // ===============================
-  // PROCESAR ACCIONES PENDIENTES
-  // ===============================
-  const pendingAction = PendingActionManager.getAction(m.sender)
-  if (pendingAction) {
-    switch (pendingAction.type) {
-      case 'add_user':
-        await handleAddUserResponse(m, conn, pendingAction)
-        return
+const handler = async (m, { conn, usedPrefix, participants, groupMetadata, args, isAdmin, isBotAdmin, isOwner, isROwner }) => {
+    try {
+        // Verificar que sea un grupo
+        if (!m.isGroup) return m.reply('⚠️ Este comando solo está disponible en grupos.')
         
-      case 'mass_kick_confirm':
-        await handleMassKickConfirm(m, conn, pendingAction, participants) // CORREGIDO: añadí participants
-        return
+        // Verificar permisos
+        if (!isAdmin && !isOwner) return m.reply('🚫 Necesitas ser administrador para usar este panel.')
+        if (!isBotAdmin) return m.reply('🤖 El bot necesita ser administrador para usar todas las funciones.')
+
+        // Obtener datos del grupo
+        const groupInfo = await conn.groupMetadata(m.chat)
+        const ownerGroup = groupInfo.owner || groupInfo.participants.find(p => p.admin === 'superadmin')?.id || m.chat.split('-')[0] + '@s.whatsapp.net'
+        const totalMembers = participants.length
+        const admins = participants.filter(p => p.admin === 'admin' || p.admin === 'superadmin')
+        const totalAdmins = admins.length
         
-      case 'custom_message':
-        await handleCustomMessage(m, conn, pendingAction)
-        return
+        // Función para obtener nombre formateado
+        const getName = async (jid) => {
+            try {
+                const name = await conn.getName(jid)
+                return name || jid.split('@')[0]
+            } catch {
+                return jid.split('@')[0]
+            }
+        }
+
+        // Panel principal
+        if (!args[0] || args[0] === 'menu') {
+            const ownerName = await getName(ownerGroup)
+            const hora = moment.tz('America/Caracas').format('DD/MM/YYYY hh:mm:ss A')
+            
+            const panelText = `╭═══════════════════
+║  🛠️ *PANEL DE CONTROL* 🛠️
+║  ────────────────
+║  👑 *Creador:* ${ownerName}
+║  👥 *Miembros:* ${totalMembers}
+║  ⚡ *Admins:* ${totalAdmins}
+║  📅 *Fecha:* ${hora}
+║  ────────────────
+║  💡 _Selecciona una opción:_
+╰═══════════════════`
+
+            await conn.sendMessage(m.chat, {
+                text: panelText,
+                footer: global.textbot,
+                templateButtons: [
+                    {
+                        index: 1,
+                        urlButton: {
+                            displayText: '📱 Contacto',
+                            url: 'https://wa.me/5214183357841'
+                        }
+                    },
+                    {
+                        index: 2,
+                        quickReplyButton: {
+                            displayText: '👤 Gestionar Usuarios',
+                            id: `${usedPrefix}panel usuarios`
+                        }
+                    },
+                    {
+                        index: 3,
+                        quickReplyButton: {
+                            displayText: '⚙️ Configurar Grupo',
+                            id: `${usedPrefix}panel config`
+                        }
+                    },
+                    {
+                        index: 4,
+                        quickReplyButton: {
+                            displayText: '🔧 Herramientas Avanzadas',
+                            id: `${usedPrefix}panel herramientas`
+                        }
+                    }
+                ]
+            }, { quoted: m })
+            return
+        }
+
+        // Sub-paneles
+        const subPanel = args[0].toLowerCase()
+        
+        // PANEL DE USUARIOS
+        if (subPanel === 'usuarios') {
+            const usuariosText = `╭═══════════════════
+║  👤 *GESTIÓN DE USUARIOS*
+║  ────────────────
+║  📊 *Miembros:* ${totalMembers}
+║  ⚡ *Admins:* ${totalAdmins}
+║  ────────────────
+║  🔹 _Selecciona una acción:_
+╰═══════════════════`
+
+            await conn.sendMessage(m.chat, {
+                text: usuariosText,
+                footer: '💡 Usa los botones para seleccionar',
+                templateButtons: [
+                    {
+                        index: 1,
+                        quickReplyButton: {
+                            displayText: '➕ Agregar Usuario',
+                            id: `${usedPrefix}panel agregar`
+                        }
+                    },
+                    {
+                        index: 2,
+                        quickReplyButton: {
+                            displayText: '👢 Expulsar Usuario',
+                            id: `${usedPrefix}panel expulsar`
+                        }
+                    },
+                    {
+                        index: 3,
+                        quickReplyButton: {
+                            displayText: '👑 Promover a Admin',
+                            id: `${usedPrefix}panel promover`
+                        }
+                    },
+                    {
+                        index: 4,
+                        quickReplyButton: {
+                            displayText: '📉 Degradar Admin',
+                            id: `${usedPrefix}panel degradar`
+                        }
+                    }
+                ]
+            }, { quoted: m })
+            return
+        }
+
+        // PANEL DE CONFIGURACIÓN
+        if (subPanel === 'config') {
+            const chat = global.db.data.chats[m.chat] || {}
+            const configText = `╭═══════════════════
+║  ⚙️ *CONFIGURACIÓN DEL GRUPO*
+║  ────────────────
+║  🔹 Estado actual:
+║  • Welcome: ${chat.welcome ? '✅' : '❌'}
+║  • Modo Admin: ${chat.modoadmin ? '✅' : '❌'}
+║  • Anti-link: ${chat.antiLink ? '✅' : '❌'}
+║  • Detect: ${chat.detect ? '✅' : '❌'}
+║  ────────────────
+║  ⚡ _Cambiar configuración:_
+╰═══════════════════`
+
+            await conn.sendMessage(m.chat, {
+                text: configText,
+                footer: '💡 Activa/Desactiva las funciones',
+                templateButtons: [
+                    {
+                        index: 1,
+                        quickReplyButton: {
+                            displayText: chat.welcome ? '❌ Desactivar Welcome' : '✅ Activar Welcome',
+                            id: `${usedPrefix}welcome ${chat.welcome ? 'disable' : 'enable'}`
+                        }
+                    },
+                    {
+                        index: 2,
+                        quickReplyButton: {
+                            displayText: chat.modoadmin ? '❌ Desactivar Modo Admin' : '✅ Activar Modo Admin',
+                            id: `${usedPrefix}modoadmin ${chat.modoadmin ? 'disable' : 'enable'}`
+                        }
+                    },
+                    {
+                        index: 3,
+                        quickReplyButton: {
+                            displayText: chat.antiLink ? '❌ Desactivar Anti-link' : '✅ Activar Anti-link',
+                            id: `${usedPrefix}antilink ${chat.antiLink ? 'disable' : 'enable'}`
+                        }
+                    },
+                    {
+                        index: 4,
+                        quickReplyButton: {
+                            displayText: chat.detect ? '❌ Desactivar Detect' : '✅ Activar Detect',
+                            id: `${usedPrefix}detect ${chat.detect ? 'disable' : 'enable'}`
+                        }
+                    }
+                ]
+            }, { quoted: m })
+            return
+        }
+
+        // PANEL DE HERRAMIENTAS AVANZADAS
+        if (subPanel === 'herramientas') {
+            const herramientasText = `╭═══════════════════
+║  🔧 *HERRAMIENTAS AVANZADAS*
+║  ────────────────
+║  🛠️ _Funciones especiales:_
+║  • Expulsar por prefijo
+║  • Listar por prefijo
+║  • Limpieza de números
+║  ────────────────
+║  ⚡ _Selecciona una opción:_
+╰═══════════════════`
+
+            await conn.sendMessage(m.chat, {
+                text: herramientasText,
+                footer: '⚠️ Estas acciones son irreversibles',
+                templateButtons: [
+                    {
+                        index: 1,
+                        quickReplyButton: {
+                            displayText: '🔢 Expulsar por Prefijo',
+                            id: `${usedPrefix}panel kicknum`
+                        }
+                    },
+                    {
+                        index: 2,
+                        quickReplyButton: {
+                            displayText: '📋 Listar por Prefijo',
+                            id: `${usedPrefix}panel listnum`
+                        }
+                    },
+                    {
+                        index: 3,
+                        quickReplyButton: {
+                            displayText: '🧹 Limpiar Inactivos',
+                            id: `${usedPrefix}panel limpiar`
+                        }
+                    },
+                    {
+                        index: 4,
+                        quickReplyButton: {
+                            displayText: '📊 Ver Estadísticas',
+                            id: `${usedPrefix}panel stats`
+                        }
+                    }
+                ]
+            }, { quoted: m })
+            return
+        }
+
+        // SUB-MENÚS ESPECÍFICOS
+        
+        // Agregar usuario
+        if (subPanel === 'agregar') {
+            await m.reply(`📨 *AGREGAR USUARIO*\n\nPara invitar a alguien al grupo, usa:\n\`\`\`${usedPrefix}add 52123456789\`\`\`\n💡 Reemplaza el número por el que deseas invitar.\n\n⚠️ Solo números sin el signo +`)
+            return
+        }
+
+        // Expulsar usuario
+        if (subPanel === 'expulsar') {
+            // Crear lista de miembros (excepto el bot y el dueño del grupo)
+            const membersList = participants
+                .filter(p => p.id !== conn.user.jid && p.id !== ownerGroup)
+                .slice(0, 10) // Limitar a 10 para no saturar
+                .map((p, i) => `${i + 1}. @${p.id.split('@')[0]}`)
+                .join('\n')
+
+            await conn.sendMessage(m.chat, {
+                text: `👢 *EXPULSAR USUARIO*\n\nSelecciona un usuario:\n\n${membersList}\n\n💡 Responde al mensaje con el número o menciona al usuario.\nEjemplo: \`${usedPrefix}kick @usuario\``,
+                mentions: participants.map(p => p.id)
+            }, { quoted: m })
+            return
+        }
+
+        // Promover a admin
+        if (subPanel === 'promover') {
+            const nonAdmins = participants
+                .filter(p => !p.admin && p.id !== conn.user.jid && p.id !== ownerGroup)
+                .slice(0, 10)
+                .map((p, i) => `${i + 1}. @${p.id.split('@')[0]}`)
+                .join('\n')
+
+            await conn.sendMessage(m.chat, {
+                text: `👑 *PROMOVER A ADMIN*\n\nSelecciona un usuario para promover:\n\n${nonAdmins}\n\n💡 Responde al mensaje con el número o menciona al usuario.\nEjemplo: \`${usedPrefix}promote @usuario\``,
+                mentions: participants.map(p => p.id)
+            }, { quoted: m })
+            return
+        }
+
+        // Degradar admin
+        if (subPanel === 'degradar') {
+            const adminsList = admins
+                .filter(p => p.id !== ownerGroup && p.id !== conn.user.jid)
+                .slice(0, 10)
+                .map((p, i) => `${i + 1}. @${p.id.split('@')[0]}`)
+                .join('\n')
+
+            await conn.sendMessage(m.chat, {
+                text: `📉 *DEGRADAR ADMIN*\n\nSelecciona un admin para degradar:\n\n${adminsList}\n\n💡 Responde al mensaje con el número o menciona al usuario.\nEjemplo: \`${usedPrefix}demote @usuario\``,
+                mentions: admins.map(p => p.id)
+            }, { quoted: m })
+            return
+        }
+
+        // Kicknum
+        if (subPanel === 'kicknum') {
+            await m.reply(`🔢 *EXPULSAR POR PREFIJO*\n\nUsa el comando:\n\`\`\`${usedPrefix}kicknum 52\`\`\`\n💡 Reemplaza \`52\` por el prefijo del país.\n\n⚠️ Esto expulsará a TODOS los usuarios con ese prefijo.`)
+            return
+        }
+
+        // Listnum
+        if (subPanel === 'listnum') {
+            await m.reply(`📋 *LISTAR POR PREFIJO*\n\nUsa el comando:\n\`\`\`${usedPrefix}listnum 52\`\`\`\n💡 Reemplaza \`52\` por el prefijo del país.\n\nℹ️ Mostrará todos los usuarios con ese prefijo.`)
+            return
+        }
+
+        // Limpiar inactivos
+        if (subPanel === 'limpiar') {
+            const inactivosText = `🧹 *LIMPIAR INACTIVOS*\n\nEsta función permite eliminar usuarios inactivos del grupo basándose en diferentes criterios:\n\n1️⃣ *Sin mensajes en 30 días*\n2️⃣ *Números no verificados*\n3️⃣ *Usuarios silenciados*\n\n🔹 Usa: \`${usedPrefix}limpiar lista\` para ver los inactivos\n🔹 Usa: \`${usedPrefix}limpiar ejecutar\` para eliminarlos\n\n⚠️ *ADVERTENCIA:* Esta acción es irreversible.`
+            await m.reply(inactivosText)
+            return
+        }
+
+        // Estadísticas
+        if (subPanel === 'stats') {
+            const hora = moment.tz('America/Caracas').format('DD/MM/YYYY hh:mm:ss A')
+            const statsText = `📊 *ESTADÍSTICAS DEL GRUPO*\n
+🏷️ *Nombre:* ${groupInfo.subject}
+👑 *Dueño:* @${ownerGroup.split('@')[0]}
+👥 *Total miembros:* ${totalMembers}
+⚡ *Total admins:* ${totalAdmins}
+📅 *Creado:* ${new Date(groupInfo.creation * 1000).toLocaleDateString()}
+🕐 *Hora actual:* ${hora}
+🔢 *Prefijos comunes:*\n${getCommonPrefixes(participants)}`
+            
+            await conn.sendMessage(m.chat, {
+                text: statsText,
+                mentions: [ownerGroup]
+            }, { quoted: m })
+            return
+        }
+
+        // Si no se reconoce el subpanel
+        await m.reply(`❓ Opción no reconocida. Usa:\n\n• ${usedPrefix}panel\n• ${usedPrefix}panel usuarios\n• ${usedPrefix}panel config\n• ${usedPrefix}panel herramientas`)
+
+    } catch (error) {
+        console.error('Error en panel:', error)
+        m.reply(`⚠️ Error en el panel:\n${error.message}`)
     }
-  }
+}
 
-  // ===============================
-  // PANEL PRINCIPAL
-  // ===============================
-  if (command === 'adminpanel' || command === 'ap') {
-    const cooldown = AdminUtils.isOnCooldown(m.sender, 'panel')
-    if (cooldown) {
-      return m.reply(`⏳ *Espera ${cooldown} segundos* antes de usar el panel nuevamente`)
-    }
-
-    const menuContent = AdminUtils.formatBox('PANEL DE ADMINISTRACIÓN', `│
-│  🔧  GESTIÓN DE USUARIOS  🔧
-│
-│  ➕  Añadir usuario
-│     » ${usedPrefix}add @user
-│     » ${usedPrefix}add 521xxxxxxxx
-│
-│  🚫  Expulsar usuario
-│     » ${usedPrefix}kick @user
-│     » ${usedPrefix}kick (responde)
-│
-│  ⬆️  Hacer administrador
-│     » ${usedPrefix}promote @user
-│
-│  ⬇️  Quitar administrador
-│     » ${usedPrefix}demote @user
-│
-│  💥  Expulsión masiva
-│     » ${usedPrefix}masskick
-│
-│  📊  Estadísticas
-│     » ${usedPrefix}groupinfo
-│
-│  ⚙️  Configuración
-│     » ${usedPrefix}groupconfig
-│`)
-
-    const buttons = [
-      {
-        buttonId: `${usedPrefix}add`,
-        buttonText: { displayText: '➕ Añadir' },
-        type: 1
-      },
-      {
-        buttonId: `${usedPrefix}groupinfo`,
-        buttonText: { displayText: '📊 Info' },
-        type: 1
-      },
-      {
-        buttonId: `${usedPrefix}masskick`,
-        buttonText: { displayText: '💥 MassKick' },
-        type: 1
-      }
-    ]
-
-    await conn.sendMessage(m.chat, {
-      text: menuContent,
-      footer: `👑 Total: ${participants.length} miembros • 🤖 Bot: ${isBotAdmin ? '✅ Admin' : '❌ No admin'}`,
-      buttons: buttons,
-      headerType: 1,
-      mentions: [m.sender]
-    }, { quoted: m })
-    return
-  }
-
-  // ===============================
-  // AÑADIR USUARIO
-  // ===============================
-  if (command === 'add') {
-    const cooldown = AdminUtils.isOnCooldown(m.sender, 'add')
-    if (cooldown) {
-      return m.reply(`⏳ *Espera ${cooldown} segundos*`)
-    }
-
-    PendingActionManager.setAction(m.sender, {
-      id: 'add_user_' + Date.now(),
-      type: 'add_user',
-      chat: m.chat,
-      admin: m.sender
+// Función para obtener prefijos comunes
+function getCommonPrefixes(participants) {
+    const prefixes = {}
+    participants.forEach(p => {
+        const num = p.id.split('@')[0]
+        if (num.length >= 2) {
+            const prefix = num.substring(0, 2)
+            prefixes[prefix] = (prefixes[prefix] || 0) + 1
+        }
     })
-
-    const instructions = AdminUtils.formatBox('AÑADIR USUARIO', `│
-│  📱  Envía el número de WhatsApp:
-│
-│  Ejemplos:
-│  • 5213312345678
-│  • 3312345678
-│  • +5213312345678
-│
-│  ⏱️  Tienes 2 minutos
-│  ❌  Escribe "cancelar" para cancelar
-│`)
-
-    await m.reply(instructions)
-    return
-  }
-
-  // ===============================
-  // EXPULSAR USUARIO
-  // ===============================
-  if (command === 'kick') {
-    const cooldown = AdminUtils.isOnCooldown(m.sender, 'kick')
-    if (cooldown) {
-      return m.reply(`⏳ *Espera ${cooldown} segundos*`)
-    }
-
-    const target = await AdminUtils.getTargetUser(m, args, participants)
-    if (!target) {
-      return m.reply(AdminUtils.formatBox('EXPULSAR USUARIO', `│
-│  📌  Uso correcto:
-│
-│  1. Menciona al usuario:
-│     » ${usedPrefix}kick @usuario
-│
-│  2. Responde un mensaje:
-│     » ${usedPrefix}kick (responde)
-│
-│  3. Usa número:
-│     » ${usedPrefix}kick 521xxxxxxx
-│`))
-    }
-
-    // No permitir expulsar a otros admins (a menos que sea owner)
-    const targetIsAdmin = participants.find(p => areJidsSameUser(p.id, target))?.admin
-    if (targetIsAdmin && !isOwner) {
-      return m.reply('⛔ *No puedes expulsar a otro administrador*')
-    }
-
-    // No permitir expulsar al bot
-    if (areJidsSameUser(target, conn.user.jid)) {
-      return m.reply('🤖 *No puedes expulsarme a mí*')
-    }
-
-    try {
-      await conn.groupParticipantsUpdate(m.chat, [target], 'remove')
-      
-      const targetNum = target.split('@')[0]
-      await m.reply(AdminUtils.formatBox('USUARIO EXPULSADO', `│
-│  ✅  Acción completada
-│
-│  👤  Usuario: ${targetNum}
-│  🚫  Motivo: Expulsión manual
-│  👑  Por: @${m.sender.split('@')[0]}
-│  ⏰  Hora: ${new Date().toLocaleTimeString()}
-│`))
-      
-      // Notificar al usuario expulsado si es posible
-      try {
-        await conn.sendMessage(target, {
-          text: `🚫 *Has sido expulsado del grupo*\n\n• Grupo: ${groupMetadata.subject}\n• Administrador: @${m.sender.split('@')[0]}\n• Hora: ${new Date().toLocaleString()}`
-        })
-      } catch (e) {
-        // Ignorar si no se puede enviar mensaje
-      }
-      
-    } catch (error) {
-      console.error('Error en kick:', error)
-      await m.reply('❌ *Error al expulsar usuario*')
-    }
-    return
-  }
-
-  // ===============================
-  // ASCENDER A ADMIN
-  // ===============================
-  if (command === 'promote') {
-    const target = await AdminUtils.getTargetUser(m, args, participants)
-    if (!target) {
-      return m.reply(AdminUtils.formatBox('ASCENDER A ADMIN', `│
-│  📌  Uso correcto:
-│
-│  ${usedPrefix}promote @usuario
-│  ${usedPrefix}promote (responde)
-│`))
-    }
-
-    try {
-      await conn.groupParticipantsUpdate(m.chat, [target], 'promote')
-      
-      await m.reply(AdminUtils.formatBox('NUEVO ADMINISTRADOR', `│
-│  ⭐  Usuario ascendido
-│
-│  👤  @${target.split('@')[0]}
-│  ⬆️  Ahora es administrador
-│  👑  Por: @${m.sender.split('@')[0]}
-│`), { mentions: [target] })
-      
-    } catch (error) {
-      console.error('Error en promote:', error)
-      await m.reply('❌ *Error al ascender usuario*')
-    }
-    return
-  }
-
-  // ===============================
-  // DEGRADAR DE ADMIN
-  // ===============================
-  if (command === 'demote') {
-    const target = await AdminUtils.getTargetUser(m, args, participants)
-    if (!target) {
-      return m.reply(AdminUtils.formatBox('QUITAR ADMIN', `│
-│  📌  Uso correcto:
-│
-│  ${usedPrefix}demote @usuario
-│  ${usedPrefix}demote (responde)
-│`))
-    }
-
-    try {
-      await conn.groupParticipantsUpdate(m.chat, [target], 'demote')
-      
-      await m.reply(AdminUtils.formatBox('ADMIN DEGRADADO', `│
-│  ⬇️  Usuario degradado
-│
-│  👤  @${target.split('@')[0]}
-│  🚫  Ya no es administrador
-│  👑  Por: @${m.sender.split('@')[0]}
-│`), { mentions: [target] })
-      
-    } catch (error) {
-      console.error('Error en demote:', error)
-      await m.reply('❌ *Error al degradar usuario*')
-    }
-    return
-  }
-
-  // ===============================
-  // EXPULSIÓN MASIVA
-  // ===============================
-  if (command === 'masskick') {
-    if (!isOwner) {
-      return m.reply('👑 *Solo el dueño del bot puede usar esta función*')
-    }
-
-    const nonAdmins = participants
-      .filter(p => !p.admin && !areJidsSameUser(p.id, conn.user.jid))
-      .map(p => p.id)
-
-    if (nonAdmins.length === 0) {
-      return m.reply('✅ *No hay usuarios no-admin para expulsar*')
-    }
-
-    if (nonAdmins.length > MAX_MASS_KICK) {
-      return m.reply(`⚠️ *Demasiados usuarios (${nonAdmins.length})*\nMáximo permitido: ${MAX_MASS_KICK}`)
-    }
-
-    PendingActionManager.setAction(m.sender, {
-      id: 'mass_kick_' + Date.now(),
-      type: 'mass_kick_confirm',
-      chat: m.chat,
-      targets: nonAdmins,
-      count: nonAdmins.length,
-      prefix: usedPrefix // CORREGIDO: añadí el prefijo
-    })
-
-    const warning = AdminUtils.formatBox('⚠️ CONFIRMAR EXPULSIÓN MASIVA ⚠️', `│
-│  🚨  ADVERTENCIA
-│
-│  Se expulsarán: ${nonAdmins.length} usuarios
-│
-│  📋  Usuarios a expulsar:
-${AdminUtils.formatUserList(nonAdmins)}
-│
-│  ❗  Esta acción NO se puede deshacer
-│
-│  ✅  Para confirmar:
-│      ${usedPrefix}confirm
-│
-│  ❌  Para cancelar:
-│      ${usedPrefix}cancel
-│
-│  ⏱️  Expira en 2 minutos
-│`)
-
-    await m.reply(warning)
-    return
-  }
-
-  // ===============================
-  // INFORMACIÓN DEL GRUPO
-  // ===============================
-  if (command === 'groupinfo' || command === 'ginfo') {
-    const admins = participants.filter(p => p.admin).length
-    const bots = participants.filter(p => p.id.includes('@s.whatsapp.net') && p.id !== conn.user.jid).length
-    const owner = participants.find(p => p.admin === 'superadmin')
     
-    const info = AdminUtils.formatBox('📊 INFORMACIÓN DEL GRUPO', `│
-│  🏷️  Nombre: ${groupMetadata.subject}
-│  📝  Descripción: ${groupMetadata.desc || 'Sin descripción'}
-│
-│  👥  Miembros totales: ${participants.length}
-│  👑  Administradores: ${admins}
-│  🤖  Bots detectados: ${bots}
-│  ⭐  Dueño: @${owner?.id?.split('@')[0] || 'No identificado'}
-│
-│  🔒  Configuración:
-│  • ${groupMetadata.announce ? 'Solo admins' : 'Todos'} pueden enviar
-│  • ${groupMetadata.restrict ? 'Restringido' : 'Libre'}
-│  • Creado: ${new Date(groupMetadata.creation * 1000).toLocaleDateString()}
-│
-│  📅  Última actualización:
-│      ${new Date().toLocaleString()}
-│`)
-
-    await m.reply(info)
-    return
-  }
+    const sorted = Object.entries(prefixes)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([prefix, count]) => `• +${prefix}: ${count} usuarios`)
+        .join('\n')
+    
+    return sorted || 'No hay datos suficientes'
 }
 
-// ===============================
-// MANEJADORES DE RESPUESTAS
-// ===============================
-async function handleAddUserResponse(m, conn, action) {
-  const text = m.text?.trim()
-  
-  if (text?.toLowerCase() === 'cancelar') {
-    PendingActionManager.clearAction(m.sender)
-    await m.reply('❌ *Acción cancelada*')
-    return
-  }
-
-  if (!text || !/^\d+$/.test(text.replace(/\D/g, ''))) {
-    await m.reply('❌ *Número inválido*\nEnvía solo números (ej: 5213312345678)\nO escribe "cancelar"')
-    return
-  }
-
-  let number = text.replace(/\D/g, '')
-  if (!number.startsWith('521') && number.length === 10) {
-    number = '521' + number
-  }
-  
-  const userJid = number + '@s.whatsapp.net'
-
-  try {
-    await conn.groupParticipantsUpdate(action.chat, [userJid], 'add')
-    
-    PendingActionManager.clearAction(m.sender)
-    
-    await m.reply(AdminUtils.formatBox('✅ USUARIO AÑADIDO', `│
-│  👤  Usuario: ${number}
-│  📞  Añadido exitosamente
-│  👑  Por: @${m.sender.split('@')[0]}
-│  ⏰  Hora: ${new Date().toLocaleTimeString()}
-│`))
-    
-  } catch (error) {
-    console.error('Error al añadir:', error)
-    let errorMsg = '❌ *Error al añadir usuario*'
-    
-    if (error.message.includes('not authorized')) {
-      errorMsg = '⛔ *No tienes permiso para añadir usuarios*'
-    } else if (error.message.includes('invite')) {
-      errorMsg = '🔗 *El enlace de invitación no es válido*'
-    } else if (error.message.includes('blocked')) {
-      errorMsg = '🚫 *El usuario te tiene bloqueado*'
-    }
-    
-    await m.reply(errorMsg)
-    PendingActionManager.clearAction(m.sender)
-  }
-}
-
-async function handleMassKickConfirm(m, conn, action, participants) { // CORREGIDO: añadí participants
-  const text = m.text?.toLowerCase()
-  const usedPrefix = action.prefix || global.prefix || '.' // CORREGIDO: uso correcto del prefijo
-  
-  if (text === `${usedPrefix}confirm` || text === 'confirmar') {
-    await m.reply(`💥 *Expulsando ${action.count} usuarios...*`)
-    
-    let success = 0
-    let failed = 0
-    
-    for (const target of action.targets) {
-      try {
-        await AdminUtils.delay(1500) // Delay para evitar rate limit
-        await conn.groupParticipantsUpdate(action.chat, [target], 'remove')
-        success++
-      } catch (error) {
-        failed++
-        console.error(`Error expulsando ${target}:`, error)
-      }
-    }
-    
-    PendingActionManager.clearAction(m.sender)
-    
-    const result = AdminUtils.formatBox('📊 RESULTADO MASSKICK', `│
-│  ✅  Expulsados: ${success}
-│  ❌  Fallados: ${failed}
-│  ⏰  Duración: ${action.count * 1.5} segundos
-│  👑  Ejecutado por: @${m.sender.split('@')[0]}
-│  📅  Fecha: ${new Date().toLocaleString()}
-│`)
-    
-    await m.reply(result)
-    
-  } else if (text === `${usedPrefix}cancel` || text === 'cancelar') {
-    PendingActionManager.clearAction(m.sender)
-    await m.reply('❌ *Expulsión masiva cancelada*')
-  }
-}
-
-// ===============================
-// METADATA
-// ===============================
-handler.command = ['adminpanel', 'ap', 'add', 'kick', 'promote', 'demote', 'masskick', 'groupinfo', 'ginfo']
-handler.tags = ['admin', 'group']
+// Configuración del handler
+handler.help = ['panel', 'adminpanel']
+handler.tags = ['group', 'admin']
+handler.command = ['panel', 'adminpanel', 'controlpanel']
 handler.group = true
 handler.admin = true
 handler.botAdmin = true
-
-handler.help = [
-  'adminpanel - Panel de administración completo',
-  'add - Añadir usuario al grupo',
-  'kick @user - Expulsar usuario',
-  'promote @user - Hacer administrador',
-  'demote @user - Quitar administrador',
-  'masskick - Expulsión masiva (solo owner)',
-  'groupinfo - Información del grupo'
-]
 
 export default handler
