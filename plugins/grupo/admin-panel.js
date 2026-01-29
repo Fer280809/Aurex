@@ -1,4 +1,4 @@
-// plugins/admin-panel.js
+// plugins/admin-panel.js - VERSIÓN CORREGIDA
 import { areJidsSameUser } from '@whiskeysockets/baileys'
 
 // ===============================
@@ -156,7 +156,7 @@ const handler = async (m, {
         return
         
       case 'mass_kick_confirm':
-        await handleMassKickConfirm(m, conn, pendingAction)
+        await handleMassKickConfirm(m, conn, pendingAction, participants) // CORREGIDO: añadí participants
         return
         
       case 'custom_message':
@@ -415,7 +415,8 @@ const handler = async (m, {
       type: 'mass_kick_confirm',
       chat: m.chat,
       targets: nonAdmins,
-      count: nonAdmins.length
+      count: nonAdmins.length,
+      prefix: usedPrefix // CORREGIDO: añadí el prefijo
     })
 
     const warning = AdminUtils.formatBox('⚠️ CONFIRMAR EXPULSIÓN MASIVA ⚠️', `│
@@ -525,10 +526,11 @@ async function handleAddUserResponse(m, conn, action) {
   }
 }
 
-async function handleMassKickConfirm(m, conn, action) {
+async function handleMassKickConfirm(m, conn, action, participants) { // CORREGIDO: añadí participants
   const text = m.text?.toLowerCase()
+  const usedPrefix = action.prefix || global.prefix || '.' // CORREGIDO: uso correcto del prefijo
   
-  if (text === `${global.prefix}confirm` || text === 'confirmar') {
+  if (text === `${usedPrefix}confirm` || text === 'confirmar') {
     await m.reply(`💥 *Expulsando ${action.count} usuarios...*`)
     
     let success = 0
@@ -557,7 +559,7 @@ async function handleMassKickConfirm(m, conn, action) {
     
     await m.reply(result)
     
-  } else if (text === `${global.prefix}cancel` || text === 'cancelar') {
+  } else if (text === `${usedPrefix}cancel` || text === 'cancelar') {
     PendingActionManager.clearAction(m.sender)
     await m.reply('❌ *Expulsión masiva cancelada*')
   }
