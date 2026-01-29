@@ -1,4 +1,4 @@
-// plugins/group-config-v2.js
+// plugins/group-config-v2.js - VERSIÓN CORREGIDA
 import fs from 'fs/promises'
 import path from 'path'
 
@@ -296,7 +296,7 @@ Los cambios se aplican inmediatamente
       break
       
     case 'reset':
-      await handleResetConfig(m, conn, config)
+      await handleResetConfig(m, conn, config, usedPrefix) // CORREGIDO: añadí usedPrefix
       break
       
     case 'backup':
@@ -480,7 +480,7 @@ ${newValue ?
   await m.reply(message, { mentions: [m.sender] })
 }
 
-async function handleResetConfig(m, conn, config) {
+async function handleResetConfig(m, conn, config, usedPrefix) { // CORREGIDO: añadí usedPrefix
   const confirmButtons = [
     {
       buttonId: `${usedPrefix}gconfig confirm_reset`,
