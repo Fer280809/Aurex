@@ -1,362 +1,330 @@
 import moment from 'moment-timezone'
 
-const handler = async (m, { conn, usedPrefix, participants, groupMetadata, args, isAdmin, isBotAdmin, isOwner, isROwner }) => {
-    try {
-        // Verificar que sea un grupo
-        if (!m.isGroup) return m.reply('⚠️ Este comando solo está disponible en grupos.')
-        
-        // Verificar permisos
-        if (!isAdmin && !isOwner) return m.reply('🚫 Necesitas ser administrador para usar este panel.')
-        if (!isBotAdmin) return m.reply('🤖 El bot necesita ser administrador para usar todas las funciones.')
-
-        // Obtener datos del grupo
-        const groupInfo = await conn.groupMetadata(m.chat)
-        const ownerGroup = groupInfo.owner || groupInfo.participants.find(p => p.admin === 'superadmin')?.id || m.chat.split('-')[0] + '@s.whatsapp.net'
-        const totalMembers = participants.length
-        const admins = participants.filter(p => p.admin === 'admin' || p.admin === 'superadmin')
-        const totalAdmins = admins.length
-        
-        // Función para obtener nombre formateado
-        const getName = async (jid) => {
-            try {
-                const name = await conn.getName(jid)
-                return name || jid.split('@')[0]
-            } catch {
-                return jid.split('@')[0]
-            }
-        }
-
-        // Panel principal
-        if (!args[0] || args[0] === 'menu') {
-            const ownerName = await getName(ownerGroup)
-            const hora = moment.tz('America/Caracas').format('DD/MM/YYYY hh:mm:ss A')
-            
-            const panelText = `╭═══════════════════
-║  🛠️ *PANEL DE CONTROL* 🛠️
-║  ────────────────
-║  👑 *Creador:* ${ownerName}
-║  👥 *Miembros:* ${totalMembers}
-║  ⚡ *Admins:* ${totalAdmins}
-║  📅 *Fecha:* ${hora}
-║  ────────────────
-║  💡 _Selecciona una opción:_
-╰═══════════════════`
-
-            await conn.sendMessage(m.chat, {
-                text: panelText,
-                footer: global.textbot,
-                templateButtons: [
-                    {
-                        index: 1,
-                        urlButton: {
-                            displayText: '📱 Contacto',
-                            url: 'https://wa.me/5214183357841'
-                        }
-                    },
-                    {
-                        index: 2,
-                        quickReplyButton: {
-                            displayText: '👤 Gestionar Usuarios',
-                            id: `${usedPrefix}panel usuarios`
-                        }
-                    },
-                    {
-                        index: 3,
-                        quickReplyButton: {
-                            displayText: '⚙️ Configurar Grupo',
-                            id: `${usedPrefix}panel config`
-                        }
-                    },
-                    {
-                        index: 4,
-                        quickReplyButton: {
-                            displayText: '🔧 Herramientas Avanzadas',
-                            id: `${usedPrefix}panel herramientas`
-                        }
-                    }
-                ]
-            }, { quoted: m })
-            return
-        }
-
-        // Sub-paneles
-        const subPanel = args[0].toLowerCase()
-        
-        // PANEL DE USUARIOS
-        if (subPanel === 'usuarios') {
-            const usuariosText = `╭═══════════════════
-║  👤 *GESTIÓN DE USUARIOS*
-║  ────────────────
-║  📊 *Miembros:* ${totalMembers}
-║  ⚡ *Admins:* ${totalAdmins}
-║  ────────────────
-║  🔹 _Selecciona una acción:_
-╰═══════════════════`
-
-            await conn.sendMessage(m.chat, {
-                text: usuariosText,
-                footer: '💡 Usa los botones para seleccionar',
-                templateButtons: [
-                    {
-                        index: 1,
-                        quickReplyButton: {
-                            displayText: '➕ Agregar Usuario',
-                            id: `${usedPrefix}panel agregar`
-                        }
-                    },
-                    {
-                        index: 2,
-                        quickReplyButton: {
-                            displayText: '👢 Expulsar Usuario',
-                            id: `${usedPrefix}panel expulsar`
-                        }
-                    },
-                    {
-                        index: 3,
-                        quickReplyButton: {
-                            displayText: '👑 Promover a Admin',
-                            id: `${usedPrefix}panel promover`
-                        }
-                    },
-                    {
-                        index: 4,
-                        quickReplyButton: {
-                            displayText: '📉 Degradar Admin',
-                            id: `${usedPrefix}panel degradar`
-                        }
-                    }
-                ]
-            }, { quoted: m })
-            return
-        }
-
-        // PANEL DE CONFIGURACIÓN
-        if (subPanel === 'config') {
-            const chat = global.db.data.chats[m.chat] || {}
-            const configText = `╭═══════════════════
-║  ⚙️ *CONFIGURACIÓN DEL GRUPO*
-║  ────────────────
-║  🔹 Estado actual:
-║  • Welcome: ${chat.welcome ? '✅' : '❌'}
-║  • Modo Admin: ${chat.modoadmin ? '✅' : '❌'}
-║  • Anti-link: ${chat.antiLink ? '✅' : '❌'}
-║  • Detect: ${chat.detect ? '✅' : '❌'}
-║  ────────────────
-║  ⚡ _Cambiar configuración:_
-╰═══════════════════`
-
-            await conn.sendMessage(m.chat, {
-                text: configText,
-                footer: '💡 Activa/Desactiva las funciones',
-                templateButtons: [
-                    {
-                        index: 1,
-                        quickReplyButton: {
-                            displayText: chat.welcome ? '❌ Desactivar Welcome' : '✅ Activar Welcome',
-                            id: `${usedPrefix}welcome ${chat.welcome ? 'disable' : 'enable'}`
-                        }
-                    },
-                    {
-                        index: 2,
-                        quickReplyButton: {
-                            displayText: chat.modoadmin ? '❌ Desactivar Modo Admin' : '✅ Activar Modo Admin',
-                            id: `${usedPrefix}modoadmin ${chat.modoadmin ? 'disable' : 'enable'}`
-                        }
-                    },
-                    {
-                        index: 3,
-                        quickReplyButton: {
-                            displayText: chat.antiLink ? '❌ Desactivar Anti-link' : '✅ Activar Anti-link',
-                            id: `${usedPrefix}antilink ${chat.antiLink ? 'disable' : 'enable'}`
-                        }
-                    },
-                    {
-                        index: 4,
-                        quickReplyButton: {
-                            displayText: chat.detect ? '❌ Desactivar Detect' : '✅ Activar Detect',
-                            id: `${usedPrefix}detect ${chat.detect ? 'disable' : 'enable'}`
-                        }
-                    }
-                ]
-            }, { quoted: m })
-            return
-        }
-
-        // PANEL DE HERRAMIENTAS AVANZADAS
-        if (subPanel === 'herramientas') {
-            const herramientasText = `╭═══════════════════
-║  🔧 *HERRAMIENTAS AVANZADAS*
-║  ────────────────
-║  🛠️ _Funciones especiales:_
-║  • Expulsar por prefijo
-║  • Listar por prefijo
-║  • Limpieza de números
-║  ────────────────
-║  ⚡ _Selecciona una opción:_
-╰═══════════════════`
-
-            await conn.sendMessage(m.chat, {
-                text: herramientasText,
-                footer: '⚠️ Estas acciones son irreversibles',
-                templateButtons: [
-                    {
-                        index: 1,
-                        quickReplyButton: {
-                            displayText: '🔢 Expulsar por Prefijo',
-                            id: `${usedPrefix}panel kicknum`
-                        }
-                    },
-                    {
-                        index: 2,
-                        quickReplyButton: {
-                            displayText: '📋 Listar por Prefijo',
-                            id: `${usedPrefix}panel listnum`
-                        }
-                    },
-                    {
-                        index: 3,
-                        quickReplyButton: {
-                            displayText: '🧹 Limpiar Inactivos',
-                            id: `${usedPrefix}panel limpiar`
-                        }
-                    },
-                    {
-                        index: 4,
-                        quickReplyButton: {
-                            displayText: '📊 Ver Estadísticas',
-                            id: `${usedPrefix}panel stats`
-                        }
-                    }
-                ]
-            }, { quoted: m })
-            return
-        }
-
-        // SUB-MENÚS ESPECÍFICOS
-        
-        // Agregar usuario
-        if (subPanel === 'agregar') {
-            await m.reply(`📨 *AGREGAR USUARIO*\n\nPara invitar a alguien al grupo, usa:\n\`\`\`${usedPrefix}add 52123456789\`\`\`\n💡 Reemplaza el número por el que deseas invitar.\n\n⚠️ Solo números sin el signo +`)
-            return
-        }
-
-        // Expulsar usuario
-        if (subPanel === 'expulsar') {
-            // Crear lista de miembros (excepto el bot y el dueño del grupo)
-            const membersList = participants
-                .filter(p => p.id !== conn.user.jid && p.id !== ownerGroup)
-                .slice(0, 10) // Limitar a 10 para no saturar
-                .map((p, i) => `${i + 1}. @${p.id.split('@')[0]}`)
-                .join('\n')
-
-            await conn.sendMessage(m.chat, {
-                text: `👢 *EXPULSAR USUARIO*\n\nSelecciona un usuario:\n\n${membersList}\n\n💡 Responde al mensaje con el número o menciona al usuario.\nEjemplo: \`${usedPrefix}kick @usuario\``,
-                mentions: participants.map(p => p.id)
-            }, { quoted: m })
-            return
-        }
-
-        // Promover a admin
-        if (subPanel === 'promover') {
-            const nonAdmins = participants
-                .filter(p => !p.admin && p.id !== conn.user.jid && p.id !== ownerGroup)
-                .slice(0, 10)
-                .map((p, i) => `${i + 1}. @${p.id.split('@')[0]}`)
-                .join('\n')
-
-            await conn.sendMessage(m.chat, {
-                text: `👑 *PROMOVER A ADMIN*\n\nSelecciona un usuario para promover:\n\n${nonAdmins}\n\n💡 Responde al mensaje con el número o menciona al usuario.\nEjemplo: \`${usedPrefix}promote @usuario\``,
-                mentions: participants.map(p => p.id)
-            }, { quoted: m })
-            return
-        }
-
-        // Degradar admin
-        if (subPanel === 'degradar') {
-            const adminsList = admins
-                .filter(p => p.id !== ownerGroup && p.id !== conn.user.jid)
-                .slice(0, 10)
-                .map((p, i) => `${i + 1}. @${p.id.split('@')[0]}`)
-                .join('\n')
-
-            await conn.sendMessage(m.chat, {
-                text: `📉 *DEGRADAR ADMIN*\n\nSelecciona un admin para degradar:\n\n${adminsList}\n\n💡 Responde al mensaje con el número o menciona al usuario.\nEjemplo: \`${usedPrefix}demote @usuario\``,
-                mentions: admins.map(p => p.id)
-            }, { quoted: m })
-            return
-        }
-
-        // Kicknum
-        if (subPanel === 'kicknum') {
-            await m.reply(`🔢 *EXPULSAR POR PREFIJO*\n\nUsa el comando:\n\`\`\`${usedPrefix}kicknum 52\`\`\`\n💡 Reemplaza \`52\` por el prefijo del país.\n\n⚠️ Esto expulsará a TODOS los usuarios con ese prefijo.`)
-            return
-        }
-
-        // Listnum
-        if (subPanel === 'listnum') {
-            await m.reply(`📋 *LISTAR POR PREFIJO*\n\nUsa el comando:\n\`\`\`${usedPrefix}listnum 52\`\`\`\n💡 Reemplaza \`52\` por el prefijo del país.\n\nℹ️ Mostrará todos los usuarios con ese prefijo.`)
-            return
-        }
-
-        // Limpiar inactivos
-        if (subPanel === 'limpiar') {
-            const inactivosText = `🧹 *LIMPIAR INACTIVOS*\n\nEsta función permite eliminar usuarios inactivos del grupo basándose en diferentes criterios:\n\n1️⃣ *Sin mensajes en 30 días*\n2️⃣ *Números no verificados*\n3️⃣ *Usuarios silenciados*\n\n🔹 Usa: \`${usedPrefix}limpiar lista\` para ver los inactivos\n🔹 Usa: \`${usedPrefix}limpiar ejecutar\` para eliminarlos\n\n⚠️ *ADVERTENCIA:* Esta acción es irreversible.`
-            await m.reply(inactivosText)
-            return
-        }
-
-        // Estadísticas
-        if (subPanel === 'stats') {
-            const hora = moment.tz('America/Caracas').format('DD/MM/YYYY hh:mm:ss A')
-            const statsText = `📊 *ESTADÍSTICAS DEL GRUPO*\n
-🏷️ *Nombre:* ${groupInfo.subject}
-👑 *Dueño:* @${ownerGroup.split('@')[0]}
-👥 *Total miembros:* ${totalMembers}
-⚡ *Total admins:* ${totalAdmins}
-📅 *Creado:* ${new Date(groupInfo.creation * 1000).toLocaleDateString()}
-🕐 *Hora actual:* ${hora}
-🔢 *Prefijos comunes:*\n${getCommonPrefixes(participants)}`
-            
-            await conn.sendMessage(m.chat, {
-                text: statsText,
-                mentions: [ownerGroup]
-            }, { quoted: m })
-            return
-        }
-
-        // Si no se reconoce el subpanel
-        await m.reply(`❓ Opción no reconocida. Usa:\n\n• ${usedPrefix}panel\n• ${usedPrefix}panel usuarios\n• ${usedPrefix}panel config\n• ${usedPrefix}panel herramientas`)
-
-    } catch (error) {
-        console.error('Error en panel:', error)
-        m.reply(`⚠️ Error en el panel:\n${error.message}`)
+let handler = async (m, { conn, text, usedPrefix, command, participants }) => {
+    // Verificar que sea grupo
+    if (!m.isGroup) return m.reply('❌ Este comando solo funciona en grupos')
+    
+    // Verificar que el bot sea admin
+    const botAdmin = participants.find(p => p.id === conn.user.jid)?.admin
+    if (!['admin', 'superadmin'].includes(botAdmin)) {
+        return m.reply('🤖 Necesito ser administrador para usar este panel')
     }
-}
+    
+    // Verificar que el usuario sea admin
+    const userAdmin = participants.find(p => p.id === m.sender)?.admin
+    if (!['admin', 'superadmin'].includes(userAdmin) && !global.owner.map(v => v.replace(/\D/g, "") + "@s.whatsapp.net").includes(m.sender)) {
+        return m.reply('⚠️ Solo administradores pueden usar este panel')
+    }
+    
+    // Obtener información del grupo
+    const groupMetadata = await conn.groupMetadata(m.chat).catch(() => null)
+    if (!groupMetadata) return m.reply('❌ No pude obtener información del grupo')
+    
+    const owner = groupMetadata.owner || groupMetadata.participants.find(p => p.admin === 'superadmin')?.id
+    const totalMembers = groupMetadata.participants.length
+    const admins = groupMetadata.participants.filter(p => ['admin', 'superadmin'].includes(p.admin))
+    const hora = moment.tz('America/Caracas').format('DD/MM/YYYY HH:mm:ss')
+    
+    // ==================== PANEL PRINCIPAL ====================
+    if (!text) {
+        const menu = `
+╭━━━━━━━━━━━━━━━━━━╮
+┃   🛠️ *PANEL DE ADMINISTRACIÓN* 🛠️
+├━━━━━━━━━━━━━━━━━━┫
+┃ 📊 *ESTADO DEL GRUPO*
+┃ • 👥 Miembros: ${totalMembers}
+┃ • 👑 Admins: ${admins.length}
+┃ • 🕐 Hora: ${hora}
+├━━━━━━━━━━━━━━━━━━┫
+┃ 🔘 *OPCIONES DISPONIBLES:*
+┃
+┃ 1️⃣ *${usedPrefix}panel add 52123456789*
+┃    ➤ Invitar a un usuario
+┃
+┃ 2️⃣ *${usedPrefix}panel kick @usuario*
+┃    ➤ Expulsar a un usuario
+┃
+┃ 3️⃣ *${usedPrefix}panel promote @usuario*
+┃    ➤ Promover a administrador
+┃
+┃ 4️⃣ *${usedPrefix}panel demote @usuario*
+┃    ➤ Degradar de administrador
+┃
+┃ 5️⃣ *${usedPrefix}panel list*
+┃    ➤ Ver lista de miembros
+┃
+┃ 6️⃣ *${usedPrefix}panel info*
+┃    ➤ Información del grupo
+╰━━━━━━━━━━━━━━━━━━╯
 
-// Función para obtener prefijos comunes
-function getCommonPrefixes(participants) {
-    const prefixes = {}
-    participants.forEach(p => {
-        const num = p.id.split('@')[0]
-        if (num.length >= 2) {
-            const prefix = num.substring(0, 2)
-            prefixes[prefix] = (prefixes[prefix] || 0) + 1
+📝 *Ejemplos de uso:*
+• ${usedPrefix}panel add 52123456789
+• ${usedPrefix}panel kick @amigo
+• ${usedPrefix}panel promote @amigo
+• ${usedPrefix}panel demote @admin
+        `.trim()
+        
+        return m.reply(menu)
+    }
+    
+    // Separar comando y argumentos
+    const args = text.trim().split(' ')
+    const action = args[0].toLowerCase()
+    const target = args.slice(1).join(' ')
+    
+    // ==================== FUNCIÓN AGREGAR USUARIO ====================
+    if (action === 'add' || action === 'agregar' || action === 'invitar') {
+        if (!target) return m.reply(`❌ Debes proporcionar un número\nEjemplo: ${usedPrefix}panel add 52123456789`)
+        
+        // Limpiar número
+        let number = target.replace(/[^0-9]/g, '')
+        if (number.length < 10) return m.reply('❌ Número inválido')
+        
+        // Generar link de invitación
+        let link = 'https://chat.whatsapp.com/' + await conn.groupInviteCode(m.chat)
+        
+        // Crear mensaje de invitación
+        const mensaje = `📨 *INVITACIÓN AL GRUPO*\n\n✨ Has sido invitado a unirte al grupo por @${m.sender.split('@')[0]}\n\n🔗 Enlace: ${link}\n\n⏰ Fecha: ${hora}`
+        
+        try {
+            await conn.sendMessage(`${number}@s.whatsapp.net`, { 
+                text: mensaje,
+                mentions: [m.sender]
+            })
+            return m.reply(`✅ Invitación enviada exitosamente a +${number}`)
+        } catch (error) {
+            return m.reply(`❌ Error al enviar invitación: ${error.message}`)
         }
-    })
+    }
     
-    const sorted = Object.entries(prefixes)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([prefix, count]) => `• +${prefix}: ${count} usuarios`)
-        .join('\n')
+    // ==================== FUNCIÓN EXPULSAR USUARIO ====================
+    if (action === 'kick' || action === 'expulsar' || action === 'sacar') {
+        // Obtener usuario mencionado o citado
+        let user = m.mentionedJid?.[0] || (m.quoted ? m.quoted.sender : null)
+        
+        if (!user && target.startsWith('@')) {
+            // Intentar extraer número de mención textual
+            const num = target.replace('@', '').replace(/[^0-9]/g, '')
+            if (num) user = `${num}@s.whatsapp.net`
+        }
+        
+        if (!user) return m.reply(`❌ Debes mencionar o citar al usuario\nEjemplo: ${usedPrefix}panel kick @usuario`)
+        
+        // Validaciones
+        if (user === conn.user.jid) return m.reply('❌ No puedo expulsarme a mí mismo')
+        if (user === owner) return m.reply('❌ No puedo expulsar al dueño del grupo')
+        if (global.owner.map(v => v.replace(/\D/g, "") + "@s.whatsapp.net").includes(user)) {
+            return m.reply('❌ No puedo expulsar al dueño del bot')
+        }
+        
+        try {
+            await conn.groupParticipantsUpdate(m.chat, [user], 'remove')
+            return m.reply(`✅ Usuario @${user.split('@')[0]} expulsado exitosamente`, null, {
+                mentions: [user]
+            })
+        } catch (error) {
+            return m.reply(`❌ Error al expulsar: ${error.message}`)
+        }
+    }
     
-    return sorted || 'No hay datos suficientes'
+    // ==================== FUNCIÓN PROMOVER ====================
+    if (action === 'promote' || action === 'promover' || action === 'admin') {
+        let user = m.mentionedJid?.[0] || (m.quoted ? m.quoted.sender : null)
+        
+        if (!user && target.startsWith('@')) {
+            const num = target.replace('@', '').replace(/[^0-9]/g, '')
+            if (num) user = `${num}@s.whatsapp.net`
+        }
+        
+        if (!user) return m.reply(`❌ Debes mencionar o citar al usuario\nEjemplo: ${usedPrefix}panel promote @usuario`)
+        
+        // Verificar si ya es admin
+        const userParticipant = groupMetadata.participants.find(p => p.id === user)
+        if (userParticipant && ['admin', 'superadmin'].includes(userParticipant.admin)) {
+            return m.reply('ℹ️ Este usuario ya es administrador')
+        }
+        
+        try {
+            await conn.groupParticipantsUpdate(m.chat, [user], 'promote')
+            return m.reply(`✅ @${user.split('@')[0]} promovido a administrador`, null, {
+                mentions: [user]
+            })
+        } catch (error) {
+            return m.reply(`❌ Error al promover: ${error.message}`)
+        }
+    }
+    
+    // ==================== FUNCIÓN DEGRADAR ====================
+    if (action === 'demote' || action === 'degradar' || action === 'quitaradmin') {
+        let user = m.mentionedJid?.[0] || (m.quoted ? m.quoted.sender : null)
+        
+        if (!user && target.startsWith('@')) {
+            const num = target.replace('@', '').replace(/[^0-9]/g, '')
+            if (num) user = `${num}@s.whatsapp.net`
+        }
+        
+        if (!user) return m.reply(`❌ Debes mencionar o citar al usuario\nEjemplo: ${usedPrefix}panel demote @admin`)
+        
+        // Validaciones
+        if (user === conn.user.jid) return m.reply('❌ No puedo degradarme a mí mismo')
+        if (user === owner) return m.reply('❌ No puedo degradar al dueño del grupo')
+        
+        try {
+            await conn.groupParticipantsUpdate(m.chat, [user], 'demote')
+            return m.reply(`✅ @${user.split('@')[0]} degradado de administrador`, null, {
+                mentions: [user]
+            })
+        } catch (error) {
+            return m.reply(`❌ Error al degradar: ${error.message}`)
+        }
+    }
+    
+    // ==================== FUNCIÓN LISTAR MIEMBROS ====================
+    if (action === 'list' || action === 'lista' || action === 'miembros') {
+        let page = parseInt(args[1]) || 1
+        const perPage = 15
+        const totalPages = Math.ceil(totalMembers / perPage)
+        
+        if (page < 1 || page > totalPages) {
+            page = 1
+        }
+        
+        const start = (page - 1) * perPage
+        const end = start + perPage
+        const pageMembers = groupMetadata.participants.slice(start, end)
+        
+        let listText = `📋 *LISTA DE MIEMBROS* (Página ${page}/${totalPages})\n`
+        listText += `👥 Total: ${totalMembers} miembros\n\n`
+        
+        pageMembers.forEach((participant, index) => {
+            const num = start + index + 1
+            const role = participant.admin === 'superadmin' ? '👑 Dueño' : 
+                        participant.admin === 'admin' ? '⚡ Admin' : '👤 Miembro'
+            const mention = `@${participant.id.split('@')[0]}`
+            listText += `${num}. ${mention} - ${role}\n`
+        })
+        
+        listText += `\n📄 Usa: *${usedPrefix}panel list ${page + 1}* para ver más`
+        
+        const mentions = pageMembers.map(p => p.id)
+        
+        return conn.sendMessage(m.chat, {
+            text: listText,
+            mentions: mentions
+        }, { quoted: m })
+    }
+    
+    // ==================== FUNCIÓN INFORMACIÓN ====================
+    if (action === 'info' || action === 'informacion' || action === 'estadisticas') {
+        // Calcular prefijos comunes
+        const prefixes = {}
+        groupMetadata.participants.forEach(p => {
+            if (p.id) {
+                const num = p.id.split('@')[0]
+                if (num.length >= 2) {
+                    const prefix = num.substring(0, 2)
+                    prefixes[prefix] = (prefixes[prefix] || 0) + 1
+                }
+            }
+        })
+        
+        const topPrefixes = Object.entries(prefixes)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([prefix, count]) => `• +${prefix}: ${count} usuarios`)
+            .join('\n')
+        
+        const infoText = `
+📊 *INFORMACIÓN DEL GRUPO*
+
+🏷️ *Nombre:* ${groupMetadata.subject || 'Sin nombre'}
+👑 *Dueño:* @${owner?.split('@')[0] || 'Desconocido'}
+👥 *Total miembros:* ${totalMembers}
+⚡ *Administradores:* ${admins.length}
+📅 *Creado:* ${new Date(groupMetadata.creation * 1000).toLocaleDateString()}
+🕐 *Hora actual:* ${hora}
+
+📈 *Distribución por país:*
+${topPrefixes || 'No hay datos suficientes'}
+
+🔗 *Enlace de invitación:* ${'https://chat.whatsapp.com/' + await conn.groupInviteCode(m.chat)}
+        `.trim()
+        
+        return conn.sendMessage(m.chat, {
+            text: infoText,
+            mentions: owner ? [owner] : []
+        }, { quoted: m })
+    }
+    
+    // ==================== FUNCIÓN KICKNUM (expulsar por prefijo) ====================
+    if (action === 'kicknum' || action === 'expulsarprefijo') {
+        if (!target) return m.reply(`❌ Debes proporcionar un prefijo\nEjemplo: ${usedPrefix}panel kicknum 52`)
+        
+        const prefix = target.replace(/[^0-9]/g, '')
+        if (prefix.length < 2) return m.reply('❌ Prefijo inválido (mínimo 2 dígitos)')
+        
+        // Buscar usuarios con ese prefijo
+        const usersToKick = groupMetadata.participants.filter(p => 
+            p.id.startsWith(prefix) && 
+            p.id !== conn.user.jid && 
+            p.id !== owner &&
+            !global.owner.map(v => v.replace(/\D/g, "") + "@s.whatsapp.net").includes(p.id)
+        )
+        
+        if (usersToKick.length === 0) {
+            return m.reply(`❌ No hay usuarios con el prefijo +${prefix}`)
+        }
+        
+        // Confirmar acción
+        const confirmation = await conn.sendMessage(m.chat, {
+            text: `⚠️ *CONFIRMAR EXPULSIÓN*\n\n¿Estás seguro de expulsar a ${usersToKick.length} usuario(s) con prefijo +${prefix}?\n\nResponder con *SI* para confirmar o *NO* para cancelar.`
+        }, { quoted: m })
+        
+        // Esperar respuesta
+        const response = await new Promise((resolve) => {
+            const listener = (msg) => {
+                if (msg.sender === m.sender && msg.chat === m.chat) {
+                    resolve(msg.text?.toLowerCase())
+                }
+            }
+            conn.ev.on('messages.upsert', ({ messages }) => {
+                messages.forEach(listener)
+            })
+            
+            // Timeout de 30 segundos
+            setTimeout(() => resolve(null), 30000)
+        })
+        
+        if (response === 'si' || response === 'sí') {
+            m.reply(`🚀 Expulsando ${usersToKick.length} usuario(s)...`)
+            
+            let success = 0
+            let failed = 0
+            
+            for (const user of usersToKick) {
+                try {
+                    await conn.groupParticipantsUpdate(m.chat, [user.id], 'remove')
+                    success++
+                    await new Promise(resolve => setTimeout(resolve, 1000)) // Esperar 1 segundo entre expulsiones
+                } catch {
+                    failed++
+                }
+            }
+            
+            return m.reply(`✅ Resultado:\n• Expulsados: ${success}\n• Fallados: ${failed}`)
+        } else {
+            return m.reply('❌ Acción cancelada')
+        }
+    }
+    
+    // Si no se reconoce la acción
+    return m.reply(`❌ Acción no reconocida\n\nUsa *${usedPrefix}panel* para ver las opciones disponibles`)
 }
 
 // Configuración del handler
-handler.help = ['panel', 'adminpanel']
+handler.help = ['panel']
 handler.tags = ['group', 'admin']
-handler.command = ['panel', 'adminpanel', 'controlpanel']
+handler.command = ['panel', 'adminpanel', 'grouppanel']
 handler.group = true
 handler.admin = true
 handler.botAdmin = true
