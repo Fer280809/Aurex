@@ -1,4 +1,4 @@
-// plugins/outfit-v2.js - Sistema completo de personalización de grupo
+// plugins/outfit-v2.js - Sistema completo de personalización de grupo - VERSIÓN CORREGIDA
 
 // ===============================
 // SISTEMA DE TEMPLATES
@@ -6,56 +6,56 @@
 const Templates = {
   welcome: {
     simple: `¡Bienvenido {user} al grupo {group}! 👋`,
-    fancy: `╔══════════════════╗
-║   🎉 BIENVENIDO 🎉   ║
-╠══════════════════╣
-║ 👤 {user}
-║ 👥 {group}
-║ 👪 {total} miembros
-║ 🕐 {time}
-╚══════════════════╝`,
-    modern: `┌─────────────────┐
-│  🌟 BIENVENIDO  │
-├─────────────────┤
-│ {user} ha entrado
-│ al grupo {group}
-│ 
-│ 📊 Total: {total}
-│ ⏰ Hora: {time}
-└─────────────────┘`,
-    anime: `(✿◠‿◠)  ¡Bienvenido {user}-sama!
-  ╰(*°▽°*)╯   al grupo {group}
+    fancy: `┌─────────────────────┐
+│     🌟 BIENVENIDO 🌟     │
+├─────────────────────┤
+│ 👤 {user}
+│ 🏷️ {group}
+│ 👥 {total} miembros
+│ 🕒 {time}
+└─────────────────────┘`,
+    modern: `╔══════════════════════╗
+║  🎉 BIENVENIDO  🎉  ║
+╠══════════════════════╣
+║ {user} ha entrado
+║ al grupo {group}
+║ 
+║ 📊 Total: {total}
+║ ⏰ Hora: {time}
+╚══════════════════════╝`,
+    anime: `(◕‿◕)  ¡Bienvenido {user}-sama!
+  °(*°▽°*)°   al grupo {group}
   
   Actualmente somos {total} miembros
   ¡Disfruta tu estancia! (๑•̀ㅂ•́)و✧`,
     gamer: `🎮 ¡NUEVO JUGADOR! 🎮
 {user} se unió a {group}
 
-🏆 Miembros: {total}
-⏱️ Hora: {time}
+👥 Miembros: {total}
+⏰ Hora: {time}
 
 ¡Buena suerte y diviértete!`
   },
 
   goodbye: {
     simple: `Adiós {user}, te extrañaremos. 👋`,
-    fancy: `╔══════════════════╗
-║   👋 ADIÓS 👋   ║
-╠══════════════════╣
-║ 👤 {user}
-║ 👥 {group}
-║ 👪 {total} miembros
-║ 🕐 {time}
-╚══════════════════╝`,
-    modern: `┌─────────────────┐
-│   😢 ADIÓS   │
-├─────────────────┤
-│ {user} ha salido
-│ del grupo {group}
-│ 
-│ 📊 Total: {total}
-│ ⏰ Hora: {time}
-└─────────────────┘`,
+    fancy: `┌─────────────────────┐
+│     👋 ADIÓS 👋     │
+├─────────────────────┤
+│ 👤 {user}
+│ 🏷️ {group}
+│ 👥 {total} miembros
+│ 🕒 {time}
+└─────────────────────┘`,
+    modern: `╔══════════════════════╗
+║   😢 ADIÓS   ║
+╠══════════════════════╣
+║ {user} ha salido
+║ del grupo {group}
+║ 
+║ 📊 Total: {total}
+║ ⏰ Hora: {time}
+╚══════════════════════╝`,
     anime: `(；ω；)  {user}-sama nos dejó...
   (╥﹏╥)   Te extrañaremos
   
@@ -64,8 +64,8 @@ const Templates = {
     gamer: `💀 JUGADOR DESCONECTADO 💀
 {user} abandonó {group}
 
-🏆 Miembros restantes: {total}
-⏱️ Hora: {time}
+👥 Miembros restantes: {total}
+⏰ Hora: {time}
 
 ¡Hasta la próxima partida!`
   }
@@ -191,21 +191,21 @@ class OutfitUI {
     const lines = []
     
     // Encabezado
-    lines.push('┌' + '─'.repeat(width - 2) + '┐')
-    lines.push(`│ 🎨 ${title.padEnd(width - 6)} │`)
-    lines.push('├' + '─'.repeat(width - 2) + '┤')
+    lines.push('╔' + '═'.repeat(width - 2) + '╗')
+    lines.push(`║ 🎨 ${title.padEnd(width - 6)} ║`)
+    lines.push('╠' + '═'.repeat(width - 2) + '╣')
     
     // Contenido
     content.split('\n').forEach(line => {
-      if (line.trim().startsWith('├') || line.trim().startsWith('└') || line.trim().startsWith('│')) {
+      if (line.trim().startsWith('╠') || line.trim().startsWith('╚') || line.trim().startsWith('║')) {
         lines.push(line.padEnd(width))
       } else {
-        lines.push(`│ ${line.padEnd(width - 4)} │`)
+        lines.push(`║ ${line.padEnd(width - 4)} ║`)
       }
     })
     
     // Pie
-    lines.push('└' + '─'.repeat(width - 2) + '┘')
+    lines.push('╚' + '═'.repeat(width - 2) + '╝')
     
     return lines.join('\n')
   }
@@ -265,30 +265,30 @@ const handler = async (m, {
     const goodbyeStatus = config.goodbye.enabled ? '✅ ACTIVADO' : '❌ DESACTIVADO'
     
     const panel = OutfitUI.createPanel('OUTFIT PANEL - PERSONALIZACIÓN', `
-├─ 🎉 BIENVENIDA: ${welcomeStatus}
-│  ├─ Template: ${config.welcome.template}
-│  ├─ Personalizado: ${config.welcome.custom ? '✅' : '❌'}
-│  └─ Multimedia: ${config.welcome.image || config.welcome.video || config.welcome.audio ? '✅' : '❌'}
-│
-├─ 👋 DESPEDIDA: ${goodbyeStatus}
-│  ├─ Template: ${config.goodbye.template}
-│  ├─ Personalizado: ${config.goodbye.custom ? '✅' : '❌'}
-│  └─ Multimedia: ${config.goodbye.image || config.goodbye.video || config.goodbye.audio ? '✅' : '❌'}
-│
-├─ ⚙️ CONFIGURACIÓN:
-│  ├─ Menciones: ${config.variables.useMentions ? '✅' : '❌'}
-│  ├─ Imágenes: ${config.variables.useImages ? '✅' : '❌'}
-│  └─ Stickers: ${config.variables.sendAsSticker ? '✅' : '❌'}
-│
-├─ 📋 COMANDOS:
-│  ├─ ${usedPrefix}outfit welcome - Configurar bienvenida
-│  ├─ ${usedPrefix}outfit goodbye - Configurar despedida
-│  ├─ ${usedPrefix}outfit test - Probar mensajes
-│  ├─ ${usedPrefix}outfit templates - Ver templates
-│  ├─ ${usedPrefix}outfit custom - Mensaje personalizado
-│  └─ ${usedPrefix}outfit reset - Restablecer
-│
-└─ 📌 VARIABLES DISPONIBLES:
+╠═ 🎉 BIENVENIDA: ${welcomeStatus}
+║  ╠═ Template: ${config.welcome.template}
+║  ╠═ Personalizado: ${config.welcome.custom ? '✅' : '❌'}
+║  ╚═ Multimedia: ${config.welcome.image || config.welcome.video || config.welcome.audio ? '✅' : '❌'}
+║
+╠═ 👋 DESPEDIDA: ${goodbyeStatus}
+║  ╠═ Template: ${config.goodbye.template}
+║  ╠═ Personalizado: ${config.goodbye.custom ? '✅' : '❌'}
+║  ╚═ Multimedia: ${config.goodbye.image || config.goodbye.video || config.goodbye.audio ? '✅' : '❌'}
+║
+╠═ ⚙️ CONFIGURACIÓN:
+║  ╠═ Menciones: ${config.variables.useMentions ? '✅' : '❌'}
+║  ╠═ Imágenes: ${config.variables.useImages ? '✅' : '❌'}
+║  ╚═ Stickers: ${config.variables.sendAsSticker ? '✅' : '❌'}
+║
+╠═ 📋 COMANDOS:
+║  ╠═ ${usedPrefix}outfit welcome - Configurar bienvenida
+║  ╠═ ${usedPrefix}outfit goodbye - Configurar despedida
+║  ╠═ ${usedPrefix}outfit test - Probar mensajes
+║  ╠═ ${usedPrefix}outfit templates - Ver templates
+║  ╠═ ${usedPrefix}outfit custom - Mensaje personalizado
+║  ╚═ ${usedPrefix}outfit reset - Restablecer
+║
+╚═ 📝 VARIABLES DISPONIBLES:
    {user} {name} {group} {total} {time}
    {date} {admins} {bots} {owner}
     `.trim(), { width: 50 })
@@ -299,7 +299,7 @@ const handler = async (m, {
         { buttonId: `${usedPrefix}outfit goodbye`, buttonText: { displayText: '👋 Goodbye' }, type: 1 }
       ],
       [
-        { buttonId: `${usedPrefix}outfit test`, buttonText: { displayText: '🧪 Test' }, type: 1 },
+        { buttonId: `${usedPrefix}outfit test`, buttonText: { displayText: '🔧 Test' }, type: 1 },
         { buttonId: `${usedPrefix}outfit templates`, buttonText: { displayText: '📋 Templates' }, type: 1 }
       ],
       [
@@ -350,7 +350,7 @@ const handler = async (m, {
       break
       
     case 'reset':
-      await handleResetConfig(m, conn, config)
+      await handleResetConfig(m, conn, config, usedPrefix) // CORREGIDO: añadí usedPrefix
       break
       
     case 'preview':
@@ -374,19 +374,19 @@ async function handleWelcomeConfig(m, conn, config, args, usedPrefix) {
   
   if (!action) {
     const panel = OutfitUI.createPanel('CONFIGURAR BIENVENIDA', `
-├─ Estado: ${config.welcome.enabled ? '✅ ACTIVADO' : '❌ DESACTIVADO'}
-├─ Template actual: ${config.welcome.template}
-├─ Mensaje personalizado: ${config.welcome.custom ? '✅' : '❌'}
-├─ Multimedia: ${config.welcome.image || config.welcome.video || config.welcome.audio ? '✅' : '❌'}
-│
-├─ 📋 COMANDOS:
-│  ├─ ${usedPrefix}outfit welcome on/off
-│  ├─ ${usedPrefix}outfit welcome template [nombre]
-│  ├─ ${usedPrefix}outfit welcome custom [mensaje]
-│  ├─ ${usedPrefix}outfit welcome media [imagen/video/audio]
-│  └─ ${usedPrefix}outfit welcome clear
-│
-└─ 🎯 EJEMPLOS:
+╠═ Estado: ${config.welcome.enabled ? '✅ ACTIVADO' : '❌ DESACTIVADO'}
+╠═ Template actual: ${config.welcome.template}
+╠═ Mensaje personalizado: ${config.welcome.custom ? '✅' : '❌'}
+╠═ Multimedia: ${config.welcome.image || config.welcome.video || config.welcome.audio ? '✅' : '❌'}
+║
+╠═ 📋 COMANDOS:
+║  ╠═ ${usedPrefix}outfit welcome on/off
+║  ╠═ ${usedPrefix}outfit welcome template [nombre]
+║  ╠═ ${usedPrefix}outfit welcome custom [mensaje]
+║  ╠═ ${usedPrefix}outfit welcome media [imagen/video/audio]
+║  ╚═ ${usedPrefix}outfit welcome clear
+║
+╚═ 🎯 EJEMPLOS:
    ${usedPrefix}outfit welcome on
    ${usedPrefix}outfit welcome template fancy
    ${usedPrefix}outfit welcome custom "¡Hola {user}!"
@@ -457,7 +457,7 @@ async function handleWelcomeConfig(m, conn, config, args, usedPrefix) {
 }
 
 async function handleTestMessages(m, conn, config, groupMetadata) {
-  await m.reply('🧪 *Probando mensajes...*')
+  await m.reply('🔧 *Probando mensajes...*')
   
   // Test Welcome
   if (config.welcome.enabled) {
@@ -466,7 +466,7 @@ async function handleTestMessages(m, conn, config, groupMetadata) {
       const welcomeMsg = welcome.text
         .replace(/{user}/g, `@${m.sender.split('@')[0]}`)
         .replace(/{group}/g, groupMetadata.subject)
-        .replace(/{total}/g, participants.length)
+        .replace(/{total}/g, groupMetadata.participants.length)
       
       await conn.sendMessage(m.chat, {
         text: `🎉 *TEST BIENVENIDA:*\n\n${welcomeMsg}`,
@@ -483,7 +483,7 @@ async function handleTestMessages(m, conn, config, groupMetadata) {
       const goodbyeMsg = goodbye.text
         .replace(/{user}/g, `@${m.sender.split('@')[0]}`)
         .replace(/{group}/g, groupMetadata.subject)
-        .replace(/{total}/g, participants.length - 1)
+        .replace(/{total}/g, groupMetadata.participants.length - 1)
       
       await conn.sendMessage(m.chat, {
         text: `👋 *TEST DESPEDIDA:*\n\n${goodbyeMsg}`,
@@ -513,24 +513,24 @@ async function handleTemplates(m, conn, args, usedPrefix) {
         .split('\n')[0]
         .substring(0, 30) + '...'
       
-      return `├─ *${name}*: ${preview}`
+      return `╠═ *${name}*: ${preview}`
     })
     .join('\n')
   
   const panel = OutfitUI.createPanel(`TEMPLATES - ${type.toUpperCase()}`, `
 ${templateList}
-│
-├─ 📋 USO:
-│  ${usedPrefix}outfit ${type} template [nombre]
-│
-└─ 🎯 EJEMPLO:
+║
+╠═ 📋 USO:
+║  ${usedPrefix}outfit ${type} template [nombre]
+║
+╚═ 🎯 EJEMPLO:
    ${usedPrefix}outfit ${type} template fancy
     `.trim(), { width: 50 })
   
   await m.reply(panel)
 }
 
-async function handleResetConfig(m, conn, config) {
+async function handleResetConfig(m, conn, config, usedPrefix) { // CORREGIDO: añadí usedPrefix
   const confirmButtons = [
     [
       { buttonId: `${usedPrefix}outfit confirm_reset`, buttonText: { displayText: '✅ Sí, restablecer' }, type: 1 },
@@ -542,13 +542,13 @@ async function handleResetConfig(m, conn, config) {
 🚨 ADVERTENCIA 🚨
 
 Estás a punto de restablecer TODA la personalización:
-├─ Templates de bienvenida
-├─ Templates de despedida
-├─ Mensajes personalizados
-├─ Configuración multimedia
-└─ Variables personalizadas
+╠═ Templates de bienvenida
+╠═ Templates de despedida
+╠═ Mensajes personalizados
+╠═ Configuración multimedia
+╚═ Variables personalizadas
 
-❗ ESTA ACCIÓN NO SE PUEDE DESHACER
+⛔ ESTA ACCIÓN NO SE PUEDE DESHACER
 
 ⏰ Confirma en 1 minuto
     `.trim(), { width: 50 })
@@ -620,12 +620,12 @@ export const outfitConfirmHandler = async (m, { conn, usedPrefix }) => {
     await m.reply(OutfitUI.createPanel('✅ CONFIGURACIÓN RESTABLECIDA', `
 Toda la personalización ha sido restablecida a valores por defecto.
 
-📌 CONFIGURACIÓN ACTUAL:
-├─ Bienvenida: ✅ Activada (template: simple)
-├─ Despedida: ✅ Activada (template: simple)
-├─ Menciones: ✅ Activadas
-├─ Imágenes: ✅ Activadas
-└─ Stickers: ❌ Desactivados
+📋 CONFIGURACIÓN ACTUAL:
+╠═ Bienvenida: ✅ Activada (template: simple)
+╠═ Despedida: ✅ Activada (template: simple)
+╠═ Menciones: ✅ Activadas
+╠═ Imágenes: ✅ Activadas
+╚═ Stickers: ❌ Desactivados
 
 🎨 Usa ${usedPrefix}outfit para personalizar de nuevo
     `.trim(), { width: 50 }))
