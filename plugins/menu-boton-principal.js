@@ -1,33 +1,32 @@
-
 let handler = async (m, { conn, usedPrefix }) => {
   try {
     // ============= DATOS DEL BOT =============
     const totalUsers = Object.keys(global.db.data.users || {}).length || 0
     const totalCommands = Object.values(global.plugins || {}).filter(v => v.help && v.tags).length || 0
     const isSubBot = conn.user.jid !== global.conn.user.jid
-    
+
     // ============= CONFIGURACIÓN DINÁMICA =============
     const botConfig = conn.subConfig || {}
-    
+
     // Nombre del bot
     const botName = botConfig.name || 
                    (isSubBot ? `SubBot ${conn.user.jid.split('@')[0].slice(-4)}` : 
                    global.botname || 'ᴀsᴛᴀ-ʙᴏᴛ')
-    
+
     // Prefijo
     const botPrefix = botConfig.prefix || 
                      (typeof global.prefix === 'string' ? global.prefix : '#')
-    
+
     // Modo
     const botMode = isSubBot ? (botConfig.mode || 'public') : 'private'
-    
+
     // Versión y librería desde global
     const version = global.vs || '1.3'
     const libreria = global.libreria || 'Baileys Multi Device'
-    
+
     // ============= OBTENER LOGO =============
     let botIcon
-    
+
     if (isSubBot && botConfig.logoUrl) {
       // Logo desde URL del SubBot
       botIcon = { url: botConfig.logoUrl }
@@ -42,7 +41,7 @@ let handler = async (m, { conn, usedPrefix }) => {
         console.error('Error leyendo logo local:', e)
       }
     }
-    
+
     // Si no hay logo del SubBot, usar el global
     if (!botIcon) {
       botIcon = { url: global.icono || 'https://raw.githubusercontent.com/Fer280809/Asta_bot/main/lib/catalogo.jpg' }
@@ -72,68 +71,34 @@ let handler = async (m, { conn, usedPrefix }) => {
 
 Selecciona una opción:`
 
-    // ============= BOTONES DINÁMICOS =============
-    let buttons
-    
-    if (isSubBot) {
-      // BOTONES PARA SUB-BOT
-      buttons = [
-        { 
-          buttonId: `${usedPrefix}menu`, 
-          buttonText: { displayText: '📜 MENÚ COMPLETO' }, 
-          type: 1 
-        },
-        { 
-          buttonId: `${usedPrefix}config`, 
-          buttonText: { displayText: '⚙️ CONFIGURAR' }, 
-          type: 1 
-        },
-        { 
-          buttonId: `${usedPrefix}resetbot`, 
-          buttonText: { displayText: '🔄 REINICIAR' }, 
-          type: 1 
-        },
-        { 
-          buttonId: `${usedPrefix}botlist`, 
-          buttonText: { displayText: '📊 MIS BOTS' }, 
-          type: 1 
-        },
-        { 
-          buttonId: `${usedPrefix}serbot`, 
-          buttonText: { displayText: '🤖 NUEVO BOT' }, 
-          type: 1 
-        }
-      ]
-    } else {
-      // BOTONES PARA BOT PRINCIPAL
-      buttons = [
-        { 
-          buttonId: `${usedPrefix}menu2`, 
-          buttonText: { displayText: '📜 MENÚ PRINCIPAL' }, 
-          type: 1 
-        },
-        { 
-          buttonId: `${usedPrefix}nuevos`, 
-          buttonText: { displayText: '📌 ACTUALIZACIONES' }, 
-          type: 1 
-        },
-        { 
-          buttonId: `${usedPrefix}serbot`, 
-          buttonText: { displayText: '🤖 CREAR SUB-BOT' }, 
-          type: 1 
-        },
-        { 
-          buttonId: `${usedPrefix}creador`, 
-          buttonText: { displayText: '👑 CREADOR' }, 
-          type: 1 
-        },
-        { 
-          buttonId: `${usedPrefix}menu+`, 
-          buttonText: { displayText: '🔞 MENÚ +18' }, 
-          type: 1 
-        }
-      ]
-    }
+    // ============= BOTONES DEL BOT PRINCIPAL (SIEMPRE) =============
+    const buttons = [
+      { 
+        buttonId: `${usedPrefix}menu2`, 
+        buttonText: { displayText: '📜 MENÚ PRINCIPAL' }, 
+        type: 1 
+      },
+      { 
+        buttonId: `${usedPrefix}nuevos`, 
+        buttonText: { displayText: '📌 ACTUALIZACIONES' }, 
+        type: 1 
+      },
+      { 
+        buttonId: `${usedPrefix}serbot`, 
+        buttonText: { displayText: '🤖 CREAR SUB-BOT' }, 
+        type: 1 
+      },
+      { 
+        buttonId: `${usedPrefix}creador`, 
+        buttonText: { displayText: '👑 CREADOR' }, 
+        type: 1 
+      },
+      { 
+        buttonId: `${usedPrefix}menu+`, 
+        buttonText: { displayText: '🔞 MENÚ +18' }, 
+        type: 1 
+      }
+    ]
 
     // ============= ENVIAR MENSAJE =============
     const messageOptions = {
@@ -157,7 +122,7 @@ Selecciona una opción:`
 
   } catch (error) {
     console.error('❌ Error en el menú:', error)
-    
+
     // MENSAJE DE FALLBACK EN CASO DE ERROR
     const fallbackText = `🎭 *${global.botname || 'ASTA-BOT'}*\n\n` +
       `¡Hola! Soy ${global.botname || 'Asta Bot'}.\n` +
