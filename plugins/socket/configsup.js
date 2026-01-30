@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path from 'path'
+import fetch from 'node-fetch'
 
 const handler = async (m, { conn, usedPrefix, command, text, args }) => {
   // Solo para SubBots
@@ -10,6 +11,7 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
   const sessionId = conn.user.jid.split('@')[0]
   const configPath = path.join(global.jadi, sessionId, 'config.json')
   const logoPath = path.join(global.jadi, sessionId, 'logo.jpg')
+  const logoUrlPath = path.join(global.jadi, sessionId, 'logo_url.txt')
 
   // Cargar o crear configuración
   let config = {}
@@ -38,7 +40,7 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
       'Modo': config.mode || 'public',
       'Anti-Private': config.antiPrivate ? '✅ Activado' : '❌ Desactivado',
       'Solo Grupos': config.gponly ? '✅ Activado' : '❌ Desactivado',
-      'Logo': config.logo ? '✅ Personalizado' : '🌐 Global',
+      'Logo': config.logoUrl ? '✅ URL' : (config.logo ? '✅ Local' : '🌐 Global'),
       'Dueño': config.owner ? `@${config.owner.split('@')[0]}` : 'No definido',
       'Creado': config.createdAt ? new Date(config.createdAt).toLocaleString() : 'Reciente'
     }
@@ -48,6 +50,10 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
       message += `• *${key}:* ${val}\n`
     }
 
+    if (config.logoUrl) {
+      message += `• *URL Logo:* ${config.logoUrl.substring(0, 30)}...\n`
+    }
+
     message += `\n📝 *Comandos de configuración:*\n`
     message += `└ ${usedPrefix}config prefix <nuevo> - Cambiar prefijo\n`
     message += `└ ${usedPrefix}config name <nombre> - Cambiar nombre\n`
@@ -55,6 +61,7 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
     message += `└ ${usedPrefix}config antiprivate <on/off> - Anti mensajes privados\n`
     message += `└ ${usedPrefix}config gponly <on/off> - Solo grupos\n`
     message += `└ ${usedPrefix}config logo - Cambiar logo (responder a imagen)\n`
+    message += `└ ${usedPrefix}config logourl <url> - Establecer logo desde URL\n`
     message += `└ ${usedPrefix}config resetlogo - Restablecer logo al global\n`
     message += `└ ${usedPrefix}config restart - Reiniciar SubBot\n`
     message += `└ ${usedPrefix}config reset - Restablecer configuración\n`
@@ -158,32 +165,104 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
       // Verificar si hay imagen
       const quoted = m.quoted || m
       if (!quoted || !quoted.mtype || !quoted.mtype.includes('image')) {
-        return m.reply(`⚠️ Responde a una imagen para establecer como logo.`)
+        return m.reply(`⚠️ Responde a una imagen para establecer como logo.\n\nTambién puedes usar: ${usedPrefix}config logourl <url>`)
       }
 
       try {
-        // Descargar imagen
-        const media = await conn.downloadAndSaveMediaMessage(quoted, logoPath)
+        await m.reply('📥 Descargando imagen...')
         
-        // Guardar referencia en config
+        // Crear directorio si no existe
+        const dirPath = path.dirname(logoPath)
+        if (!fs.existsSync(dirPath)) {
+          fs.mkdirSync(dirPath, { recursive: true })
+        }
+        
+        // Descargar imagen
+        const buffer = await quoted.download()
+        
+        // Guardar archivo
+        fs.writeFileSync(logoPath, buffer)
+        
+        // Actualizar configuración
         config.logo = logoPath
+        delete config.logoUrl // Eliminar URL si existía
         
         await saveConfig(configPath, config)
         
         // Actualizar en memoria
         conn.subConfig = conn.subConfig || {}
         conn.subConfig.logo = logoPath
+        delete conn.subConfig.logoUrl
         
-        // Cargar y enviar preview
-        const logoBuffer = fs.readFileSync(logoPath)
+        // Enviar confirmación con preview
         await conn.sendMessage(m.chat, {
-          image: logoBuffer,
-          caption: '✅ Logo actualizado correctamente para este SubBot'
+          image: buffer,
+          caption: '✅ Logo actualizado correctamente para este SubBot\n\n*Tipo:* Imagen local'
         }, { quoted: m })
         
       } catch (error) {
         console.error(error)
-        return m.reply('❌ Error al procesar la imagen.')
+        return m.reply('❌ Error al procesar la imagen. Asegúrate de que sea una imagen válida.')
+      }
+      break
+    }
+
+    case 'logourl': {
+      if (!value) {
+        return m.reply(`⚠️ Uso: ${usedPrefix}config logourl <url>\n\nEjemplo: ${usedPrefix}config logourl https://ejemplo.com/logo.jpg`)
+      }
+
+      try {
+        // Validar URL
+        if (!value.startsWith('http')) {
+          return m.reply('❌ URL inválida. Debe comenzar con http:// o https://')
+        }
+
+        await m.reply('📥 Descargando imagen desde URL...')
+
+        // Descargar imagen desde URL
+        const response = await fetch(value)
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+
+        const buffer = await response.buffer()
+        
+        // Verificar que sea una imagen
+        const contentType = response.headers.get('content-type')
+        if (!contentType || !contentType.startsWith('image/')) {
+          return m.reply('❌ La URL no apunta a una imagen válida.')
+        }
+
+        // Crear directorio si no existe
+        const dirPath = path.dirname(logoPath)
+        if (!fs.existsSync(dirPath)) {
+          fs.mkdirSync(dirPath, { recursive: true })
+        }
+
+        // Guardar localmente también
+        fs.writeFileSync(logoPath, buffer)
+        
+        // Guardar URL en configuración
+        config.logoUrl = value
+        config.logo = logoPath // También guardar referencia local
+        
+        await saveConfig(configPath, config)
+
+        // Actualizar en memoria
+        conn.subConfig = conn.subConfig || {}
+        conn.subConfig.logoUrl = value
+        conn.subConfig.logo = logoPath
+
+        // Enviar confirmación con preview
+        await conn.sendMessage(m.chat, {
+          image: buffer,
+          caption: `✅ Logo desde URL actualizado\n\n*URL:* ${value.substring(0, 50)}...\n*Tipo:* ${contentType}`
+        }, { quoted: m })
+
+      } catch (error) {
+        console.error(error)
+        return m.reply(`❌ Error al descargar la imagen:\n${error.message}`)
       }
       break
     }
@@ -194,43 +273,47 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
         fs.unlinkSync(logoPath)
       }
       
-      // Limpiar referencia en config
+      if (fs.existsSync(logoUrlPath)) {
+        fs.unlinkSync(logoUrlPath)
+      }
+      
+      // Limpiar referencias en config
       delete config.logo
+      delete config.logoUrl
       
       await saveConfig(configPath, config)
       
       // Actualizar en memoria
       if (conn.subConfig) {
         delete conn.subConfig.logo
+        delete conn.subConfig.logoUrl
       }
       
       return m.reply('✅ Logo restablecido al logo global.')
     }
 
     case 'restart': {
-      await m.reply('🔄 Reiniciando SubBot...')
+      // Guardar el chat donde se solicitó el reinicio
+      const restartChat = m.chat
       
-      // Cerrar conexión actual del SubBot
-      try {
-        if (conn.ws && conn.ws.readyState !== 3) { // 3 = CLOSED
-          conn.ws.close()
+      // Enviar mensaje de confirmación ANTES de cerrar la conexión
+      await m.reply('🔄 Reiniciando SubBot... Esto tomará unos segundos.')
+      
+      // Usar setTimeout para dar tiempo al mensaje de enviarse
+      setTimeout(async () => {
+        try {
+          // Cerrar la conexión del SubBot
+          if (conn.ws && conn.ws.readyState !== 3) { // 3 = CLOSED
+            conn.ws.close()
+          }
+          
+          // Si tienes un sistema de reconexión automática, esto debería reconectar solo
+          console.log(`🔄 SubBot ${conn.user.jid} reiniciado por solicitud`)
+          
+        } catch (error) {
+          console.error('Error al reiniciar SubBot:', error)
         }
-        
-        // Enviar señal para reiniciar
-        if (typeof global.restartSubBot === 'function') {
-          global.restartSubBot(conn.user.jid)
-        }
-        
-        setTimeout(() => {
-          conn.sendMessage(m.chat, {
-            text: '✅ SubBot reiniciado exitosamente.'
-          }, { quoted: m })
-        }, 3000)
-        
-      } catch (error) {
-        console.error(error)
-        return m.reply('❌ Error al reiniciar el SubBot.')
-      }
+      }, 2000) // Esperar 2 segundos antes de cerrar
       break
     }
 
@@ -250,6 +333,10 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
       // Eliminar logo personalizado si existe
       if (fs.existsSync(logoPath)) {
         fs.unlinkSync(logoPath)
+      }
+      
+      if (fs.existsSync(logoUrlPath)) {
+        fs.unlinkSync(logoUrlPath)
       }
 
       fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2))
@@ -274,6 +361,40 @@ async function saveConfig(path, config) {
   // Actualizar en memoria global
   if (global.subBotsData) {
     global.subBotsData.set(path, config)
+  }
+}
+
+// Función para obtener el logo del SubBot
+export async function getSubBotLogo(conn) {
+  try {
+    if (conn.subConfig) {
+      // Si tiene URL de logo
+      if (conn.subConfig.logoUrl) {
+        const response = await fetch(conn.subConfig.logoUrl)
+        if (response.ok) {
+          return await response.buffer()
+        }
+      }
+      
+      // Si tiene logo local
+      if (conn.subConfig.logo && fs.existsSync(conn.subConfig.logo)) {
+        return fs.readFileSync(conn.subConfig.logo)
+      }
+    }
+    
+    // Si no hay logo personalizado, usar el global
+    if (global.icono && global.icono.startsWith('http')) {
+      const response = await fetch(global.icono)
+      if (response.ok) {
+        return await response.buffer()
+      }
+    }
+    
+    // Usar el catalogo global como fallback
+    return global.catalogo || Buffer.alloc(0)
+  } catch (error) {
+    console.error('Error obteniendo logo:', error)
+    return global.catalogo || Buffer.alloc(0)
   }
 }
 
