@@ -20,6 +20,7 @@ import { Boom } from '@hapi/boom'
 import { makeWASocket, protoType, serialize } from './lib/simple.js'
 import { Low, JSONFile } from 'lowdb'
 import store from './lib/store.js'
+import './plugins/socket/guardar-config.js'
 const { proto } = (await import('@whiskeysockets/baileys')).default
 import pkg from 'google-libphonenumber'
 const { PhoneNumberUtil } = pkg
@@ -396,3 +397,5 @@ async function isValidPhoneNumber(number) {
     return false
   }
 }
+
+console.log(chalk.green('✅ Sistema de configuraciones cargado'))
