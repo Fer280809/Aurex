@@ -1,4 +1,3 @@
-
 import { watchFile, unwatchFile } from "fs"
 import chalk from "chalk"
 import { fileURLToPath } from "url"
@@ -55,6 +54,17 @@ global.currency = "¥enes"
 global.banner = "https://raw.githubusercontent.com/Fer280809/Asta_bot/main/lib/catalogo.jpg"
 global.icono = "https://raw.githubusercontent.com/Fer280809/Asta_bot/main/lib/catalogo.jpg"
 global.catalogo = fs.readFileSync('./lib/catalogo.jpg')
+
+//urls
+
+global.group = "https://chat.whatsapp.com/BfCKeP10yZZ9ancsGy1Eh9"
+global.community = "https://chat.whatsapp.com/KKwDZn5vDAE6MhZFAcVQeO"
+global.channel = "https://whatsapp.com/channel/0029Vb64nWqLo4hb8cuxe23n"
+global.github = "https://github.com/Fer280809/Asta-bot"
+global.gmail = "fer2809fl@gmail.com"
+global.ch = {
+ch1: "120363399175402285@newsletter"
+}
 
 // ============= FUNCIÓN PARA REINICIAR SUBS =============
 global.restartAllSubBots = async function() {
