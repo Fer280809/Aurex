@@ -1,29 +1,64 @@
-        
 let handler = async (m, { conn, usedPrefix }) => {
-  let totalreg = Object.keys(global.db.data.users).length;
-  let totalCommands = Object.values(global.plugins).filter(
-    (v) => v.help && v.tags
-  ).length;
-  let libreria = 'Baileys';
-  let vs = '1.3';
-  let userId = m.sender;
+  try {
+    const totalUsers = Object.keys(global.db.data.users || {}).length || 0
+    const totalCommands = Object.values(global.plugins || {}).filter(v => v.help && v.tags).length || 0
+    const isSubBot = conn.user.jid !== global.conn.user.jid
+    const botConfig = conn.subConfig || {}
 
-  let infoText = `╭─━━━━━━━━━━━━━━━─╮
-│ 🎭 ¡Hola @${userId.split('@')[0]}! 💖
-╰─━━━━━━━━━━━━━━━─╯
+    const botName = botConfig.name || 
+                   (isSubBot ? `SubBot ${conn.user.jid.split('@')[0].slice(-4)}` : 
+                   global.botname || 'ᴀsᴛᴀ-ʙᴏᴛ')
 
-Me llamo『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡
+    const botPrefix = typeof global.prefix === 'string' ? global.prefix : 
+                     (botConfig.prefix || '#')
 
-╭─═⊰ 📡 𝐄𝐒𝐓𝐀𝐃𝐎 𝐀𝐂𝐓𝐈𝐕𝐎
-│ 🤖 Estado: ${(conn.user.jid == global.conn.user.jid ? '🟢 PREMIUM' : '🔗 prem-ʙᴏᴛ')}
-│ 👥 Users: 『${totalreg.toLocaleString()}』🔥
-│ 🛠️ Comandos: 『${totalCommands}』⚙️
-│ 📅 Librería » ${libreria}
-│ 🌍 Servidor: México 🇲🇽
-│ 📡 Ping: Online ✅
-│ 💾 Version: ${vs}
-│ 🔒 Modo: ${(conn.user.jid == global.conn.user.jid ? '🔐 PRIVADO' : '🔓 PUBLICO')}
-╰───────────────╯
+    const botMode = isSubBot ? (botConfig.mode || 'public') : 'private'
+
+    const version = botConfig.version || global.vs || '1.3'
+    const libreria = global.libreria || 'Baileys Multi Device'
+    const creadorNombre = botConfig.creador || global.etiqueta || '𝕱𝖊𝖗𝖓𝖆𝖓𝖉𝖔 '
+    const creadorNumero = botConfig.creadorNumero || global.creador || ''
+    const moneda = botConfig.currency || global.currency || '¥enes'
+    
+    let botIcon
+    if (isSubBot && botConfig.logoUrl) {
+      botIcon = { url: botConfig.logoUrl }
+    } 
+    else if (isSubBot && botConfig.logo) {
+      try {
+        const fs = await import('fs')
+        if (fs.existsSync(botConfig.logo)) {
+          botIcon = fs.readFileSync(botConfig.logo)
+        }
+      } catch (e) {
+        console.error('Error leyendo logo local:', e)
+      }
+    }
+    else if (global.icono) {
+      botIcon = { url: global.icono }
+    }
+    else {
+      botIcon = { url: 'https://raw.githubusercontent.com/Fer280809/Asta_bot/main/lib/catalogo.jpg' }
+    }
+
+    const infoText = `
+╭━━━━━━━━━━━━━━━━━━╮
+│  🎭 *${botName.toUpperCase()}* ⚡
+╰━━━━━━━━━━━━━━━━━━╯
+
+👋 ¡Hola @${m.sender.split('@')[0]}!
+
+╭─═⊰ 📡 *ESTADO ACTIVO*
+│ 🤖 *Tipo:* ${isSubBot ? '🔗 SUB-BOT' : '🟢 BOT PRINCIPAL'}
+│ ⚙️ *Prefijo:* ${botPrefix}
+│ 🔧 *Modo:* ${botMode === 'private' ? '🔐 PRIVADO' : '🔓 PÚBLICO'}
+│ 👥 *Usuarios:* ${totalUsers.toLocaleString()}
+│ 🛠️ *Comandos:* ${totalCommands}
+│ 📚 *Librería:* ${libreria}
+│ 🌍 *Servidor:* México 🇲🇽
+│ ⚡ *Ping:* ✅Online
+│ 🔄 *Versión:* ${version}
+╰───────────────────
 
 
 
@@ -72,41 +107,52 @@ Me llamo『 𝕬𝖘𝖙𝖆-𝕭𝖔𝖙 』⚡
 ᰔᩚ *#𝑢𝑛𝑑𝑟𝑒𝑠𝑠 • #𝑒𝑛𝑐𝑢𝑒𝑟𝑎𝑟* + <𝑚𝑒𝑛𝑐𝑖𝑜𝑛>
 > ✦ 𝐷𝑒𝑠𝑛𝑢𝑑𝑎𝑟 𝑎 𝑎𝑙𝑔𝑢𝑖𝑒𝑛
 ᰔᩚ *#𝑦𝑢𝑟𝑖 • #𝑡𝑖𝑗𝑒𝑟𝑎𝑠* + <𝑚𝑒𝑛𝑐𝑖𝑜𝑛>
-> ✦ 𝐻𝑎𝑐𝑒𝑟 𝑡𝑖𝑗𝑒𝑟𝑎𝑠. `;
+> ✦ 𝐻𝑎𝑐𝑒𝑟 𝑡𝑖𝑗𝑒𝑟𝑎𝑠. `
 
-  let buttons = [
-    { buttonId: usedPrefix + 'menu2', buttonText: { displayText: '📜 Menú' }, type: 1 }
-  ];
+    const buttons = [
+      { 
+        buttonId: `${botPrefix}menu2`, 
+        buttonText: { displayText: '📜 MENÚ PRINCIPAL' }, 
+        type: 1 
+      }
+    ]
 
-  // ✅ URL RAW de GitHub (cambia "github.com" por "raw.githubusercontent.com")
-  let mediaUrl = 'https://raw.githubusercontent.com/Fer280809/Asta_bot/main/lib/catalogo.jpg';
-
-  try {
-    // Enviar con imagen usando URL raw
-    await conn.sendMessage(m.chat, {
-      image: { url: mediaUrl },
+    const messageOptions = {
       caption: infoText,
-      footer: "『𝕬𝖘𝖙𝖆-𝕭𝖔𝖙』⚡",
+      footer: `${botName} • v${version}`,
       buttons: buttons,
       headerType: 4,
-      mentions: [userId]
-    }, { quoted: m });
-  } catch (e) {
-    console.error('Error al enviar imagen:', e);
-    // Si falla, envía sin imagen
-    let buttonMessage = {
-      text: infoText,
-      footer: "『𝕬𝖘𝖙𝖆-𝕭𝖔𝖙』⚡",
-      buttons: buttons,
-      headerType: 1,
-      mentions: [userId]
-    };
-    await conn.sendMessage(m.chat, buttonMessage, { quoted: m });
+      mentions: [m.sender]
+    }
+
+    if (Buffer.isBuffer(botIcon)) {
+      messageOptions.image = botIcon
+    } else {
+      messageOptions.image = botIcon
+    }
+
+    await conn.sendMessage(m.chat, messageOptions, { quoted: m })
+
+  } catch (error) {
+    console.error('❌ Error en el menú:', error)
+
+    const fallbackText = `🎭 *${global.botname || 'ASTA-BOT'}*\n\n` +
+      `¡Hola! Soy ${global.botname || 'Asta Bot'}.\n` +
+      `🚀 Usa ${typeof global.prefix === 'string' ? global.prefix : '#'}menu2 para ver el menú completo\n` +
+      `🤖 Usa ${typeof global.prefix === 'string' ? global.prefix : '#'}serbot para crear un Sub-Bot\n\n` +
+      `👑 Creador: ${global.etiqueta || 'ғᴇʀɴᴀɴᴅᴏ'}\n` +
+      `🔧 Versión: ${global.vs || '1.3'}`
+
+    await conn.sendMessage(m.chat, { 
+      text: fallbackText,
+      mentions: [m.sender]
+    }, { quoted: m })
   }
-};
+}
 
-handler.help = ['menu'];
-handler.tags = ['main'];
-handler.command = ['menú+', 'menu+', 'help+', 'menu18'];
+handler.help = ['menu+', 'menú+', 'help+', 'menu18']
+handler.tags = ['main']
+handler.command = ['menu+', 'menú+', 'help+', 'menu18']
 
-export default handler;
+export default handler
+
