@@ -269,10 +269,30 @@ if (i < 0) return
 delete global.conns[i]
 global.conns.splice(i, 1)
 }}, 60000)
-let handler = await import('../handler.js')
+
+// CORRECCIÓN: IMPORTAR HANDLER DESDE LA RUTA CORRECTA
+let handler
+try {
+  // Intenta importar desde la ruta relativa correcta
+  handler = await import('../../handler.js')
+} catch (e1) {
+  try {
+    // Si falla, intenta desde la raíz
+    handler = await import('./handler.js')
+  } catch (e2) {
+    try {
+      // Último intento: desde el directorio actual
+      handler = await import('../handler.js')
+    } catch (e3) {
+      console.error('⚠️ No se pudo cargar handler.js desde ninguna ruta:', e3)
+      return
+    }
+  }
+}
+
 let creloadHandler = async function (restatConn) {
 try {
-const Handler = await import(`../handler.js?update=${Date.now()}`).catch(console.error)
+const Handler = await import(`../../handler.js?update=${Date.now()}`).catch(console.error)
 if (Object.keys(Handler || {}).length) handler = Handler
 } catch (e) {
 console.error('⚠︎ Nuevo error: ', e)
