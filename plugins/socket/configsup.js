@@ -9,6 +9,7 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
 
   const sessionId = conn.user.jid.split('@')[0]
   const configPath = path.join(global.jadi, sessionId, 'config.json')
+  const logoPath = path.join(global.jadi, sessionId, 'logo.jpg')
 
   // Cargar o crear configuración
   let config = {}
@@ -37,6 +38,7 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
       'Modo': config.mode || 'public',
       'Anti-Private': config.antiPrivate ? '✅ Activado' : '❌ Desactivado',
       'Solo Grupos': config.gponly ? '✅ Activado' : '❌ Desactivado',
+      'Logo': config.logo ? '✅ Personalizado' : '🌐 Global',
       'Dueño': config.owner ? `@${config.owner.split('@')[0]}` : 'No definido',
       'Creado': config.createdAt ? new Date(config.createdAt).toLocaleString() : 'Reciente'
     }
@@ -52,6 +54,9 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
     message += `└ ${usedPrefix}config mode <public/private> - Cambiar modo\n`
     message += `└ ${usedPrefix}config antiprivate <on/off> - Anti mensajes privados\n`
     message += `└ ${usedPrefix}config gponly <on/off> - Solo grupos\n`
+    message += `└ ${usedPrefix}config logo - Cambiar logo (responder a imagen)\n`
+    message += `└ ${usedPrefix}config resetlogo - Restablecer logo al global\n`
+    message += `└ ${usedPrefix}config restart - Reiniciar SubBot\n`
     message += `└ ${usedPrefix}config reset - Restablecer configuración\n`
 
     await conn.sendMessage(m.chat, { 
@@ -149,6 +154,86 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
       return m.reply(`✅ Solo-Grupos ${state === 'on' ? 'activado' : 'desactivado'}`)
     }
 
+    case 'logo': {
+      // Verificar si hay imagen
+      const quoted = m.quoted || m
+      if (!quoted || !quoted.mtype || !quoted.mtype.includes('image')) {
+        return m.reply(`⚠️ Responde a una imagen para establecer como logo.`)
+      }
+
+      try {
+        // Descargar imagen
+        const media = await conn.downloadAndSaveMediaMessage(quoted, logoPath)
+        
+        // Guardar referencia en config
+        config.logo = logoPath
+        
+        await saveConfig(configPath, config)
+        
+        // Actualizar en memoria
+        conn.subConfig = conn.subConfig || {}
+        conn.subConfig.logo = logoPath
+        
+        // Cargar y enviar preview
+        const logoBuffer = fs.readFileSync(logoPath)
+        await conn.sendMessage(m.chat, {
+          image: logoBuffer,
+          caption: '✅ Logo actualizado correctamente para este SubBot'
+        }, { quoted: m })
+        
+      } catch (error) {
+        console.error(error)
+        return m.reply('❌ Error al procesar la imagen.')
+      }
+      break
+    }
+
+    case 'resetlogo': {
+      // Eliminar logo personalizado
+      if (fs.existsSync(logoPath)) {
+        fs.unlinkSync(logoPath)
+      }
+      
+      // Limpiar referencia en config
+      delete config.logo
+      
+      await saveConfig(configPath, config)
+      
+      // Actualizar en memoria
+      if (conn.subConfig) {
+        delete conn.subConfig.logo
+      }
+      
+      return m.reply('✅ Logo restablecido al logo global.')
+    }
+
+    case 'restart': {
+      await m.reply('🔄 Reiniciando SubBot...')
+      
+      // Cerrar conexión actual del SubBot
+      try {
+        if (conn.ws && conn.ws.readyState !== 3) { // 3 = CLOSED
+          conn.ws.close()
+        }
+        
+        // Enviar señal para reiniciar
+        if (typeof global.restartSubBot === 'function') {
+          global.restartSubBot(conn.user.jid)
+        }
+        
+        setTimeout(() => {
+          conn.sendMessage(m.chat, {
+            text: '✅ SubBot reiniciado exitosamente.'
+          }, { quoted: m })
+        }, 3000)
+        
+      } catch (error) {
+        console.error(error)
+        return m.reply('❌ Error al reiniciar el SubBot.')
+      }
+      break
+    }
+
     case 'reset': {
       // Restablecer configuración
       const defaultConfig = {
@@ -160,6 +245,11 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
         owner: config.owner || m.sender,
         createdAt: config.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
+      }
+
+      // Eliminar logo personalizado si existe
+      if (fs.existsSync(logoPath)) {
+        fs.unlinkSync(logoPath)
       }
 
       fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2))
