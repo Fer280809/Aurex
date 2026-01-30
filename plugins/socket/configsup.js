@@ -14,21 +14,6 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
   let config = {}
   if (fs.existsSync(configPath)) {
     config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-  } else {
-    // Crear configuración por defecto si no existe
-    config = {
-      name: `SubBot ${sessionId}`,
-      prefix: global.prefix,
-      mode: 'public',
-      antiPrivate: false,
-      gponly: false,
-      icon: global.icono, // Icono por defecto
-      banner: global.banner, // Banner por defecto
-      owner: m.sender,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
   }
 
   // Verificar permisos
@@ -52,8 +37,6 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
       'Modo': config.mode || 'public',
       'Anti-Private': config.antiPrivate ? '✅ Activado' : '❌ Desactivado',
       'Solo Grupos': config.gponly ? '✅ Activado' : '❌ Desactivado',
-      'Icono': config.icon ? '✅ Personalizado' : '❌ Por defecto',
-      'Banner': config.banner ? '✅ Personalizado' : '❌ Por defecto',
       'Dueño': config.owner ? `@${config.owner.split('@')[0]}` : 'No definido',
       'Creado': config.createdAt ? new Date(config.createdAt).toLocaleString() : 'Reciente'
     }
@@ -69,8 +52,6 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
     message += `└ ${usedPrefix}config mode <public/private> - Cambiar modo\n`
     message += `└ ${usedPrefix}config antiprivate <on/off> - Anti mensajes privados\n`
     message += `└ ${usedPrefix}config gponly <on/off> - Solo grupos\n`
-    message += `└ ${usedPrefix}config icon <url> - Cambiar icono/imagen\n`
-    message += `└ ${usedPrefix}config banner <url> - Cambiar banner\n`
     message += `└ ${usedPrefix}config reset - Restablecer configuración\n`
 
     await conn.sendMessage(m.chat, { 
@@ -168,64 +149,6 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
       return m.reply(`✅ Solo-Grupos ${state === 'on' ? 'activado' : 'desactivado'}`)
     }
 
-    case 'icon': {
-      if (!value) return m.reply(`⚠️ Uso: ${usedPrefix}config icon <url_de_imagen>`)
-      
-      // Validar que sea una URL válida
-      if (!value.startsWith('http')) {
-        return m.reply('❌ Debe ser una URL válida que empiece con http:// o https://')
-      }
-
-      const oldIcon = config.icon || 'Por defecto'
-      config.icon = value
-
-      // Actualizar en el socket
-      conn.subConfig = conn.subConfig || {}
-      conn.subConfig.icon = value
-
-      await saveConfig(configPath, config)
-      
-      // Probar si la imagen es accesible
-      try {
-        await conn.sendMessage(m.chat, {
-          image: { url: value },
-          caption: `✅ Icono cambiado\n\n🔗 Nueva URL: ${value}`
-        }, { quoted: m })
-      } catch (e) {
-        return m.reply(`✅ Icono cambiado\n\n⚠️ La URL fue guardada pero puede que la imagen no sea accesible.\n🔗 URL: ${value}`)
-      }
-      return
-    }
-
-    case 'banner': {
-      if (!value) return m.reply(`⚠️ Uso: ${usedPrefix}config banner <url_de_imagen>`)
-      
-      // Validar que sea una URL válida
-      if (!value.startsWith('http')) {
-        return m.reply('❌ Debe ser una URL válida que empiece con http:// o https://')
-      }
-
-      const oldBanner = config.banner || 'Por defecto'
-      config.banner = value
-
-      // Actualizar en el socket
-      conn.subConfig = conn.subConfig || {}
-      conn.subConfig.banner = value
-
-      await saveConfig(configPath, config)
-      
-      // Probar si la imagen es accesible
-      try {
-        await conn.sendMessage(m.chat, {
-          image: { url: value },
-          caption: `✅ Banner cambiado\n\n🔗 Nueva URL: ${value}`
-        }, { quoted: m })
-      } catch (e) {
-        return m.reply(`✅ Banner cambiado\n\n⚠️ La URL fue guardada pero puede que la imagen no sea accesible.\n🔗 URL: ${value}`)
-      }
-      return
-    }
-
     case 'reset': {
       // Restablecer configuración
       const defaultConfig = {
@@ -234,8 +157,6 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
         mode: 'public',
         antiPrivate: false,
         gponly: false,
-        icon: global.icono, // Volver al icono por defecto
-        banner: global.banner, // Volver al banner por defecto
         owner: config.owner || m.sender,
         createdAt: config.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString()
