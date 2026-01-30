@@ -26,7 +26,6 @@ export async function handler(chatUpdate) {
         if (!m) return
         m.exp = 0
         
-        // Inicialización optimizada de datos
         const user = global.db.data.users[m.sender] = global.db.data.users[m.sender] || {
             name: m.name || "",
             exp: 0, coin: 0, bank: 0, level: 0, health: 100,
@@ -50,7 +49,19 @@ export async function handler(chatUpdate) {
         
         if (typeof m.text !== "string") m.text = ""
         
-        // Actualizar nombre del usuario
+        // Cargar configuración del SubBot si existe
+        if (this.subConfig) {
+            if (this.subConfig.mode === 'private') {
+                settings.self = true
+            }
+            if (this.subConfig.antiPrivate !== undefined) {
+                settings.antiPrivate = this.subConfig.antiPrivate
+            }
+            if (this.subConfig.gponly !== undefined) {
+                settings.gponly = this.subConfig.gponly
+            }
+        }
+        
         try {
             const newName = m.pushName || await this.getName(m.sender)
             if (typeof newName === "string" && newName.trim() && newName !== user.name) {
@@ -58,17 +69,29 @@ export async function handler(chatUpdate) {
             }
         } catch {}
         
-        // Verificaciones de permisos
         const isROwner = [...global.owner].map(v => v.replace(/\D/g, "") + "@s.whatsapp.net").includes(m.sender)
         const isOwner = isROwner || m.fromMe
         const isPrems = isROwner || global.prems.map(v => v.replace(/\D/g, "") + "@s.whatsapp.net").includes(m.sender) || user.premium
         const isOwners = [this.user.jid, ...global.owner.map(v => v + "@s.whatsapp.net")].includes(m.sender)
         
         if (settings.self && !isOwners) return
-        if (settings.gponly && !isOwners && !m.chat.endsWith('g.us') && 
-            !/code|p|ping|qr|estado|status|infobot|botinfo|report|reportar|invite|join|logout|suggest|help|menu/gim.test(m.text)) return
+        if (settings.gponly && !isOwners && !m.chat.endsWith('g.us')) {
+            const allowedCommands = [
+                'qr', 'code', 'menu', 'help', 'infobot', 'ping',
+                'estado', 'status', 'report', 'reportar', 'suggest',
+                'subcmd', 'config', 'cmdinfo', 'botlist', 'menú'
+            ]
+            
+            const userCommand = m.text.split(' ')[0].toLowerCase()
+            const isAllowed = allowedCommands.some(cmd => 
+                userCommand.includes(cmd.toLowerCase())
+            )
+            
+            if (!isAllowed) {
+                return m.reply(`❌ Este bot solo funciona en grupos.\n\n📌 Comandos permitidos en privado:\n${allowedCommands.map(cmd => `• ${cmd}`).join('\n')}`)
+            }
+        }
         
-        // Sistema de cola de mensajes
         if (global.opts?.queque && m.text && !isPrems) {
             const queue = this.msgqueue
             queue.push(m.id || m.key.id)
@@ -81,7 +104,6 @@ export async function handler(chatUpdate) {
         if (m.isBaileys) return
         m.exp += Math.ceil(Math.random() * 10)
         
-        // Detección de administradores optimizada
         let groupMetadata = {}
         let participants = []
         
@@ -102,7 +124,6 @@ export async function handler(chatUpdate) {
         const isAdmin = isRAdmin || userGroup?.admin === 'admin' || userGroup?.admin === true
         const isBotAdmin = botGroup?.admin === 'admin' || botGroup?.admin === 'superadmin' || botGroup?.admin === true
         
-        // Procesar plugins
         const ___dirname = path.join(path.dirname(fileURLToPath(import.meta.url)), "./plugins")
         
         for (const name in global.plugins) {
@@ -111,7 +132,6 @@ export async function handler(chatUpdate) {
             
             const __filename = join(___dirname, name)
             
-            // Ejecutar plugin.all si existe
             if (typeof plugin.all === "function") {
                 try {
                     await plugin.all.call(this, m, { chatUpdate, __dirname: ___dirname, __filename, user, chat, settings })
@@ -120,11 +140,11 @@ export async function handler(chatUpdate) {
                 }
             }
             
-            // Saltar plugins admin si no hay restrict
             if (!global.opts?.restrict && plugin.tags?.includes("admin")) continue
             
-            // Manejo de prefijos
-            const pluginPrefix = plugin.customPrefix || conn.prefix || global.prefix
+            const pluginPrefix = plugin.customPrefix || 
+                               (this.subConfig?.prefix) || 
+                               global.prefix
             let match = null
             
             if (pluginPrefix instanceof RegExp) {
@@ -141,7 +161,6 @@ export async function handler(chatUpdate) {
             
             if (!match) continue
             
-            // Ejecutar before hook
             if (typeof plugin.before === "function") {
                 if (await plugin.before.call(this, m, {
                     match, conn: this, participants, groupMetadata,
@@ -153,7 +172,6 @@ export async function handler(chatUpdate) {
             
             if (typeof plugin !== "function") continue
             
-            // Determinar prefijo usado
             let usedPrefix = (match[0] || "")[0] || (global.sinprefix ? '' : undefined)
             if (usedPrefix === undefined) continue
             
@@ -161,7 +179,6 @@ export async function handler(chatUpdate) {
             let [command, ...args] = noPrefix.trim().split(" ").filter(v => v)
             command = (command || "").toLowerCase()
             
-            // Verificar si el comando coincide
             let isAccept = false
             if (plugin.command instanceof RegExp) {
                 isAccept = plugin.command.test(command)
@@ -178,7 +195,6 @@ export async function handler(chatUpdate) {
             global.comando = command
             user.commands = (user.commands || 0) + 1
             
-            // Verificar baneos
             if (chat.isBanned && !isROwner) {
                 const aviso = `⚠️ El bot *${global.botname}* está desactivado en este grupo.\n\n> 🔹 Un *administrador* puede activarlo usando:\n> » *${usedPrefix}bot on*`
                 await m.reply(aviso)
@@ -191,7 +207,6 @@ export async function handler(chatUpdate) {
                 return
             }
             
-            // Verificar permisos del comando
             const adminMode = chat.modoadmin
             const requiresAdmin = plugin.botAdmin || plugin.admin || plugin.group
             
@@ -208,7 +223,6 @@ export async function handler(chatUpdate) {
             m.isCommand = true
             m.exp += plugin.exp ? parseInt(plugin.exp) : 10
             
-            // Ejecutar el plugin
             try {
                 await plugin.call(this, m, {
                     match, usedPrefix, noPrefix, args,
@@ -241,18 +255,15 @@ export async function handler(chatUpdate) {
     } catch (err) {
         console.error(err)
     } finally {
-        // Limpiar cola de mensajes
         if (global.opts?.queque && m?.text) {
             const index = this.msgqueue.indexOf(m.id || m.key.id)
             if (index > -1) this.msgqueue.splice(index, 1)
         }
         
-        // Actualizar experiencia del usuario
         if (m?.sender && global.db.data.users[m.sender]) {
             global.db.data.users[m.sender].exp += m.exp || 0
         }
         
-        // Imprimir mensaje
         try {
             if (!global.opts?.noprint) {
                 await import("./lib/print.js").then(mod => mod.default(m, this))
@@ -263,7 +274,6 @@ export async function handler(chatUpdate) {
     }
 }
 
-// Función de fallo optimizada
 global.dfail = (type, m, conn) => {
     const messages = {
         rowner: `💠 *Acceso denegado*\nEl comando *${global.comando}* solo puede ser usado por los *creadores del bot*.`,
@@ -279,7 +289,6 @@ global.dfail = (type, m, conn) => {
     if (messages[type]) conn.reply(m.chat, messages[type], m).then(_ => m.react?.('✖️'))
 }
 
-// Watch para recargar automáticamente
 let file = global.__filename(import.meta.url, true)
 watchFile(file, async () => {
     unwatchFile(file)
