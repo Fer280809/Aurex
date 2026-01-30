@@ -1,4 +1,4 @@
-import { getSubBotLogo } from './configsub.js' // Importar función para obtener logo
+import { getSubBotLogo } from '../configsub.js' // Importar función para obtener logo
 
 let handler = async (m, { conn, usedPrefix, command }) => {
   let totalreg = Object.keys(global.db.data.users).length;
