@@ -1,115 +1,181 @@
-import { getSubBotLogo } from '../configsub.js' // Importar función para obtener logo
 
-let handler = async (m, { conn, usedPrefix, command }) => {
-  let totalreg = Object.keys(global.db.data.users).length;
-  let totalCommands = Object.values(global.plugins).filter(v => v.help && v.tags).length;
-
-  const botConfig = conn.subConfig || {}
-  const isSubBot = conn.user.jid !== global.conn.user.jid
-  
-  // Obtener nombre dinámico
-  const botName = botConfig.name || 
-                 (isSubBot ? `SubBot ${conn.user.jid.split('@')[0].slice(-4)}` : global.botname)
-  
-  // Obtener prefijo dinámico
-  const botPrefix = botConfig.prefix || global.prefix
-  
-  // Obtener modo dinámico
-  const botMode = isSubBot ? (botConfig.mode || 'public') : 'private'
-
-  // Obtener logo del SubBot o global
-  let botIcon
+let handler = async (m, { conn, usedPrefix }) => {
   try {
-    if (isSubBot) {
-      // Usar la función importada para obtener logo del SubBot
-      botIcon = await getSubBotLogo(conn)
-      if (!botIcon || botIcon.length < 100) {
-        // Si no hay logo válido, usar el global
-        botIcon = { url: global.icono }
+    // ============= DATOS DEL BOT =============
+    const totalUsers = Object.keys(global.db.data.users || {}).length || 0
+    const totalCommands = Object.values(global.plugins || {}).filter(v => v.help && v.tags).length || 0
+    const isSubBot = conn.user.jid !== global.conn.user.jid
+    
+    // ============= CONFIGURACIÓN DINÁMICA =============
+    const botConfig = conn.subConfig || {}
+    
+    // Nombre del bot
+    const botName = botConfig.name || 
+                   (isSubBot ? `SubBot ${conn.user.jid.split('@')[0].slice(-4)}` : 
+                   global.botname || 'ᴀsᴛᴀ-ʙᴏᴛ')
+    
+    // Prefijo
+    const botPrefix = botConfig.prefix || 
+                     (typeof global.prefix === 'string' ? global.prefix : '#')
+    
+    // Modo
+    const botMode = isSubBot ? (botConfig.mode || 'public') : 'private'
+    
+    // Versión y librería desde global
+    const version = global.vs || '1.3'
+    const libreria = global.libreria || 'Baileys Multi Device'
+    
+    // ============= OBTENER LOGO =============
+    let botIcon
+    
+    if (isSubBot && botConfig.logoUrl) {
+      // Logo desde URL del SubBot
+      botIcon = { url: botConfig.logoUrl }
+    } else if (isSubBot && botConfig.logo) {
+      // Logo local del SubBot (se enviará como buffer más adelante)
+      try {
+        const fs = await import('fs')
+        if (fs.existsSync(botConfig.logo)) {
+          botIcon = fs.readFileSync(botConfig.logo)
+        }
+      } catch (e) {
+        console.error('Error leyendo logo local:', e)
       }
-    } else {
-      botIcon = { url: global.icono }
     }
-  } catch (e) {
-    console.error('Error obteniendo logo:', e)
-    botIcon = { url: global.icono }
-  }
+    
+    // Si no hay logo del SubBot, usar el global
+    if (!botIcon) {
+      botIcon = { url: global.icono || 'https://raw.githubusercontent.com/Fer280809/Asta_bot/main/lib/catalogo.jpg' }
+    }
 
-  // Texto informativo dinámico
-  let infoText = `╭─━━━━━━━━━━━━━━━─╮
-│ 🎭 ¡Hola @${m.sender.split('@')[0]}! 💖
-╰─━━━━━━━━━━━━━━━─╯
+    // ============= TEXTO DEL MENÚ =============
+    const infoText = `╭━━━━━━━━━━━━━━━━━━╮
+│  🎭 *${botName.toUpperCase()}* ⚡
+╰━━━━━━━━━━━━━━━━━━╯
 
-*${botName}* ⚡ ${isSubBot ? '(SubBot)' : '(Bot Principal)'}
+👋 ¡Hola @${m.sender.split('@')[0]}!
 
-╭─═⊰ 📡 𝐄𝐒𝐓𝐀𝐃𝐎 𝐀𝐂𝐓𝐈𝐕𝐎
-│ 🤖 Estado: ${isSubBot ? '🔗 SUB-BOT' : '🟢 PRINCIPAL'}
-│ 🔧 Prefijo: ${botPrefix}
-│ 👥 Usuarios: ${totalreg.toLocaleString()}
-│ 🛠️ Comandos: ${totalCommands}
-│ 📅 Librería: Baileys MD
-│ 🌍 Servidor: México 🇲🇽
-│ 📡 Ping: ${Date.now() - m.timestamp}ms
-│ 💾 Version: ${global.vs}
-│ 🔒 Modo: ${botMode === 'private' ? '🔐 PRIVADO' : '🔓 PÚBLICO'}
-╰───────────────╯
+╭─═⊰ 📡 *ESTADO ACTIVO*
+│ 🤖 *Tipo:* ${isSubBot ? '🔗 SUB-BOT' : '🟢 BOT PRINCIPAL'}
+│ ⚙️ *Prefijo:* ${botPrefix}
+│ 🔧 *Modo:* ${botMode === 'private' ? '🔐 PRIVADO' : '🔓 PÚBLICO'}
+│ 👥 *Usuarios:* ${totalUsers.toLocaleString()}
+│ 🛠️ *Comandos:* ${totalCommands}
+│ 📚 *Librería:* ${libreria}
+│ 🌍 *Servidor:* México 🇲🇽
+│ ⚡ *Ping:* ${Date.now() - m.timestamp}ms
+│ 🔄 *Versión:* ${version}
+╰───────────────────
 
-*Creador ғᴇʀɴᴀɴᴅᴏ 👑*
-Selecciona una opción:`;
+👑 *Creador:* ${global.etiqueta || 'ғᴇʀɴᴀɴᴅᴏ'}
+💰 *Moneda:* ${global.currency || '¥enes'}
 
-  // Botones dinámicos según el tipo de bot
-  let buttons
-  
-  if (isSubBot) {
-    // BOTONES PARA SUBBOT
-    buttons = [
-      { buttonId: `${usedPrefix}menu`, buttonText: { displayText: '📜 Menú Completo' }, type: 1 },
-      { buttonId: `${usedPrefix}config`, buttonText: { displayText: '⚙️ Configurar' }, type: 1 },
-      { buttonId: `${usedPrefix}resetbot`, buttonText: { displayText: '🔄 Reiniciar' }, type: 1 },
-      { buttonId: `${usedPrefix}botlist`, buttonText: { displayText: '📊 Mis Bots' }, type: 1 },
-      { buttonId: `${usedPrefix}serbot`, buttonText: { displayText: '🤖 Nuevo Bot' }, type: 1 }
-    ]
-  } else {
-    // BOTONES PARA BOT PRINCIPAL
-    buttons = [
-      { buttonId: `${usedPrefix}menu2`, buttonText: { displayText: '📜 Menú' }, type: 1 },
-      { buttonId: `${usedPrefix}nuevos`, buttonText: { displayText: '📌 Actualizaciones' }, type: 1 },
-      { buttonId: `${usedPrefix}serbot`, buttonText: { displayText: '🤖 Sup-Bot' }, type: 1 },
-      { buttonId: `${usedPrefix}creador`, buttonText: { displayText: '👑 CREADOR' }, type: 1 },
-      { buttonId: `${usedPrefix}menu+`, buttonText: { displayText: '➕ Menu +18' }, type: 1 }
-    ]
-  }
+Selecciona una opción:`
 
-  try {
-    // Enviar mensaje con imagen dinámica
-    await conn.sendMessage(m.chat, {
-      image: botIcon,
+    // ============= BOTONES DINÁMICOS =============
+    let buttons
+    
+    if (isSubBot) {
+      // BOTONES PARA SUB-BOT
+      buttons = [
+        { 
+          buttonId: `${usedPrefix}menu`, 
+          buttonText: { displayText: '📜 MENÚ COMPLETO' }, 
+          type: 1 
+        },
+        { 
+          buttonId: `${usedPrefix}config`, 
+          buttonText: { displayText: '⚙️ CONFIGURAR' }, 
+          type: 1 
+        },
+        { 
+          buttonId: `${usedPrefix}resetbot`, 
+          buttonText: { displayText: '🔄 REINICIAR' }, 
+          type: 1 
+        },
+        { 
+          buttonId: `${usedPrefix}botlist`, 
+          buttonText: { displayText: '📊 MIS BOTS' }, 
+          type: 1 
+        },
+        { 
+          buttonId: `${usedPrefix}serbot`, 
+          buttonText: { displayText: '🤖 NUEVO BOT' }, 
+          type: 1 
+        }
+      ]
+    } else {
+      // BOTONES PARA BOT PRINCIPAL
+      buttons = [
+        { 
+          buttonId: `${usedPrefix}menu2`, 
+          buttonText: { displayText: '📜 MENÚ PRINCIPAL' }, 
+          type: 1 
+        },
+        { 
+          buttonId: `${usedPrefix}nuevos`, 
+          buttonText: { displayText: '📌 ACTUALIZACIONES' }, 
+          type: 1 
+        },
+        { 
+          buttonId: `${usedPrefix}serbot`, 
+          buttonText: { displayText: '🤖 CREAR SUB-BOT' }, 
+          type: 1 
+        },
+        { 
+          buttonId: `${usedPrefix}creador`, 
+          buttonText: { displayText: '👑 CREADOR' }, 
+          type: 1 
+        },
+        { 
+          buttonId: `${usedPrefix}menu+`, 
+          buttonText: { displayText: '🔞 MENÚ +18' }, 
+          type: 1 
+        }
+      ]
+    }
+
+    // ============= ENVIAR MENSAJE =============
+    const messageOptions = {
       caption: infoText,
-      footer: `『${botName}』⚡ • v${global.vs}`,
+      footer: `${global.botname || 'ᴀsᴛᴀ-ʙᴏᴛ'} • v${version}`,
       buttons: buttons,
       headerType: 4,
       mentions: [m.sender]
-    }, { quoted: m });
+    }
+
+    // Agregar imagen según el tipo
+    if (Buffer.isBuffer(botIcon)) {
+      // Si es un buffer (imagen local)
+      messageOptions.image = botIcon
+    } else {
+      // Si es una URL
+      messageOptions.image = botIcon
+    }
+
+    await conn.sendMessage(m.chat, messageOptions, { quoted: m })
+
+  } catch (error) {
+    console.error('❌ Error en el menú:', error)
     
-  } catch (e) {
-    console.error('Error al enviar menú:', e);
-    
-    // Fallback: enviar sin imagen
-    let fallbackMessage = {
-      text: infoText,
-      footer: `『${botName}』⚡ • v${global.vs}`,
-      buttons: buttons,
-      headerType: 1,
+    // MENSAJE DE FALLBACK EN CASO DE ERROR
+    const fallbackText = `🎭 *${global.botname || 'ASTA-BOT'}*\n\n` +
+      `¡Hola! Soy ${global.botname || 'Asta Bot'}.\n` +
+      `🚀 Usa ${usedPrefix}menu2 para ver el menú completo\n` +
+      `🤖 Usa ${usedPrefix}serbot para crear un Sub-Bot\n\n` +
+      `👑 Creador: ${global.etiqueta || 'ғᴇʀɴᴀɴᴅᴏ'}\n` +
+      `🔧 Versión: ${global.vs || '1.3'}`
+
+    await conn.sendMessage(m.chat, { 
+      text: fallbackText,
       mentions: [m.sender]
-    };
-    
-    await conn.sendMessage(m.chat, fallbackMessage, { quoted: m });
+    }, { quoted: m })
   }
-};
+}
 
-// Comandos para forzar actualización del menú
-handler.help = ['menu', 'menú', 'help', 'actualizarmenu'];
-handler.tags = ['main'];
-handler.command = ['menu', 'menú', 'help', 'actualizarmenu'];
+// ============= CONFIGURACIÓN DEL COMANDO =============
+handler.help = ['menu', 'menú', 'help', 'start']
+handler.tags = ['main']
+handler.command = ['menu', 'menú', 'help', 'start', 'iniciar']
 
-export default handler;
+export default handler
