@@ -1,4 +1,6 @@
 process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1'
+
+// ============= IMPORTS PRINCIPALES =============
 import './settings.js'
 import './plugins/funciones/_allfake.js'
 import cfonts from 'cfonts'
@@ -20,7 +22,6 @@ import { Boom } from '@hapi/boom'
 import { makeWASocket, protoType, serialize } from './lib/simple.js'
 import { Low, JSONFile } from 'lowdb'
 import store from './lib/store.js'
-import './plugins/socket/guardar-config.js'
 const { proto } = (await import('@whiskeysockets/baileys')).default
 import pkg from 'google-libphonenumber'
 const { PhoneNumberUtil } = pkg
@@ -28,10 +29,24 @@ const phoneUtil = PhoneNumberUtil.getInstance()
 const { DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, jidNormalizedUser } = await import('@whiskeysockets/baileys')
 import readline from 'readline'
 import NodeCache from 'node-cache'
+
+// ============= VARIABLES GLOBALES =============
+if (!global.conns) global.conns = []
+if (!global.subBotsData) global.subBotsData = new Map()
+
+global.supConfig = {
+  maxSubBots: 100,
+  sessionTime: 45,
+  cooldown: 120,
+  autoClean: true,
+  folder: "Sessions/SubBot",
+}
+
 const { CONNECTING } = ws
 const { chain } = lodash
 const PORT = process.env.PORT || process.env.SERVER_PORT || 3000
 
+// ============= INICIO DEL BOT =============
 let { say } = cfonts
 console.log(chalk.magentaBright('\n▶ Iniciando Asta Bot...'))
 say('Asta Bot', {
@@ -88,6 +103,7 @@ global.loadDatabase = async function loadDatabase() {
 }
 loadDatabase()
 
+// ============= CONEXIÓN PRINCIPAL =============
 const { state, saveCreds } = await useMultiFileAuthState(global.sessions)
 const msgRetryCounterCache = new NodeCache({ stdTTL: 0, checkperiod: 0 })
 const userDevicesCache = new NodeCache({ stdTTL: 0, checkperiod: 0 })
@@ -179,6 +195,7 @@ if (!opts['test']) {
   }, 60 * 1000)
 }
 
+// ============= MANEJO DE CONEXIÓN =============
 async function connectionUpdate(update) {
   const { connection, lastDisconnect } = update
   
@@ -202,6 +219,7 @@ async function connectionUpdate(update) {
   }
 }
 
+// ============= MANEJO DE ERRORES =============
 process.on('uncaughtException', console.error)
 let isInit = true
 let handler = await import('./handler.js')
@@ -244,6 +262,7 @@ process.on('unhandledRejection', (reason) => {
   console.error("⚠ Error:", reason)
 })
 
+// ============= CARGA DE PLUGINS =============
 function getPluginFiles(dir, baseDir = dir) {
   let results = []
   if (!existsSync(dir)) return results
@@ -304,6 +323,7 @@ async function filesInit() {
 
 filesInit().catch(console.error)
 
+// ============= RECARGA AUTOMÁTICA =============
 global.reload = async (_ev, filename) => {
   if (!/\.js$/.test(filename)) return
 
@@ -367,8 +387,10 @@ for (const folder of pluginFolders) {
   }
 }
 
+// ============= INICIAR HANDLER =============
 await global.reloadHandler()
 
+// ============= LIMPIEZA AUTOMÁTICA =============
 setInterval(() => {
   const tmpDir = join(__dirname, 'tmp')
   if (existsSync(tmpDir)) {
@@ -385,6 +407,7 @@ setInterval(() => {
   }
 }, 10 * 60 * 1000)
 
+// ============= FUNCIONES AUXILIARES =============
 async function isValidPhoneNumber(number) {
   try {
     number = number.replace(/\s+/g, '')
@@ -397,5 +420,3 @@ async function isValidPhoneNumber(number) {
     return false
   }
 }
-
-console.log(chalk.green('✅ Sistema de configuraciones cargado'))
