@@ -1,70 +1,59 @@
 let handler = async (m, { conn, usedPrefix }) => {
-  let totalreg = Object.keys(global.db.data.users).length
-  let totalCommands = Object.values(global.plugins).filter(v => v.help && v.tags).length
-  let userId = m.sender
+  let totalreg = Object.keys(global.db.data.users).length;
+  let totalCommands = Object.values(global.plugins).filter(v => v.help && v.tags).length;
   
-  // Obtener configuración personalizada
-  const isMainBot = conn.user.jid === global.conn.user.jid
-  const config = global.getSubBotConfig(conn.user.jid)
-  
-  // Usar valores personalizados o globales
-  let botName = config.name
-  let botLogo = config.logo
-  let botStatus = config.customStatus
+  // Obtener configuración del bot (principal o sub)
+  const botConfig = conn.subConfig || {}
+  const botName = botConfig.name || global.botname
+  const botIcon = botConfig.icon || global.icono
+  const isSubBot = conn.user.jid !== global.conn.user.jid
   
   let infoText = `╭─━━━━━━━━━━━━━━━─╮
-│ 🎭 ¡Hola @${userId.split('@')[0]}! 💖
+│ 🎭 ¡Hola @${m.sender.split('@')[0]}! 💖
 ╰─━━━━━━━━━━━━━━━─╯
 
-Me llamo『 ${botName} 』⚡
-${isMainBot ? '' : '(Sub-Bot Personalizado)'}
+Me llamo *${botName}* ⚡
 
-╭─═⊰ 📡 𝐄𝐒𝐓𝐀𝐃𝐎
-│ 🤖 Estado: ${botStatus}
-│ 📊 Tipo: ${isMainBot ? '🟢 Principal' : '🔗 Sub-Bot'}
+╭─═⊰ 📡 𝐄𝐒𝐓𝐀𝐃𝐎 𝐀𝐂𝐓𝐈𝐕𝐎
+│ 🤖 Estado: ${isSubBot ? '🔗 SUB-BOT' : '🟢 PRINCIPAL'}
 │ 👥 Users: ${totalreg.toLocaleString()}
 │ 🛠️ Comandos: ${totalCommands}
-│ 🔣 Prefijos: ${config.prefix.join(' ')}
-│ 🔓 Sin prefijo: ${config.sinprefix ? '✅' : '❌'}
+│ 📅 Librería: Baileys MD
+│ 🌍 Servidor: México 🇲🇽
+│ 📡 Ping: ${Date.now() - m.timestamp}ms
+│ 💾 Version: 1.3
+│ 🔒 Modo: ${isSubBot ? '🔓 PÚBLICO' : '🔐 PRIVADO'}
 ╰───────────────╯
 
-${isMainBot ? 'Creador Fernando 👑' : 'Configuración Personal'}
-Selecciona:`
+*Creador ғᴇʀɴᴀɴᴅᴏ 👑*
+Selecciona una opción:`;
 
   let buttons = [
-    { buttonId: usedPrefix + 'menu2', buttonText: { displayText: '📜 Menú' }, type: 1 },
-    { buttonId: usedPrefix + 'nuevos', buttonText: { displayText: '📌 Updates' }, type: 1 },
-    { buttonId: usedPrefix + 'code', buttonText: { displayText: '🤖 Sub-Bot' }, type: 1 }
-  ]
-
-  // Agregar botón de configuración si es sub-bot o Fernando
-  const isFernandoMember = global.fernando.map(v => v.replace(/\D/g, "") + "@s.whatsapp.net").includes(userId)
-  if (!isMainBot || isFernandoMember) {
-    buttons.push({ buttonId: usedPrefix + 'config', buttonText: { displayText: '⚙️ Config' }, type: 1 })
-  }
+    { buttonId: usedPrefix + 'menu', buttonText: { displayText: '📜 Menú' }, type: 1 },
+    { buttonId: usedPrefix + 'nuevos', buttonText: { displayText: '📌 Actualizaciones' }, type: 1 },
+    { buttonId: usedPrefix + 'code', buttonText: { displayText: '🤖 Sup-Bot' }, type: 1 },
+    { buttonId: usedPrefix + 'creador', buttonText: { displayText: '👑 CREADOR' }, type: 1 }
+  ];
 
   try {
     await conn.sendMessage(m.chat, {
-      image: { url: botLogo },
+      image: { url: botIcon },
       caption: infoText,
       footer: botName,
       buttons: buttons,
-      headerType: 4,
-      mentions: [userId]
-    }, { quoted: m })
+      mentions: [m.sender]
+    }, { quoted: m });
   } catch (e) {
+    console.error('Error:', e)
     await conn.sendMessage(m.chat, {
       text: infoText,
-      footer: botName,
       buttons: buttons,
-      headerType: 1,
-      mentions: [userId]
+      mentions: [m.sender]
     }, { quoted: m })
   }
-}
+};
 
-handler.help = ['menu']
-handler.tags = ['main']
-handler.command = ['menú', 'menu']
-
-export default handler
+handler.help = ['menu'];
+handler.tags = ['main'];
+handler.command = ['menú', 'menu', 'help'];
+export default handler;
