@@ -1,7 +1,7 @@
-// plugins/gacha-claim.js
+// plugins/gacha/claim.js
 import fs from 'fs';
 import path from 'path';
-import { capitalize } from '../lib/gacha-config.js';
+import { capitalize } from '../../lib/gacha-config.js';
 
 const handler = async (m, { conn }) => {
     const userId = m.sender;
