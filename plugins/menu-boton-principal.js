@@ -2,12 +2,12 @@ let handler = async (m, { conn, usedPrefix }) => {
   let totalreg = Object.keys(global.db.data.users).length;
   let totalCommands = Object.values(global.plugins).filter(v => v.help && v.tags).length;
   
-  // Obtener configuración del bot (principal o sub)
   const botConfig = conn.subConfig || {}
   const botName = botConfig.name || global.botname
   const botIcon = botConfig.icon || global.icono
   const isSubBot = conn.user.jid !== global.conn.user.jid
-  
+  const botPrefix = botConfig.prefix || global.prefix
+
   let infoText = `╭─━━━━━━━━━━━━━━━─╮
 │ 🎭 ¡Hola @${m.sender.split('@')[0]}! 💖
 ╰─━━━━━━━━━━━━━━━─╯
@@ -16,24 +16,38 @@ Me llamo *${botName}* ⚡
 
 ╭─═⊰ 📡 𝐄𝐒𝐓𝐀𝐃𝐎 𝐀𝐂𝐓𝐈𝐕𝐎
 │ 🤖 Estado: ${isSubBot ? '🔗 SUB-BOT' : '🟢 PRINCIPAL'}
+│ 🔧 Prefijo: ${botPrefix}
 │ 👥 Users: ${totalreg.toLocaleString()}
 │ 🛠️ Comandos: ${totalCommands}
 │ 📅 Librería: Baileys MD
 │ 🌍 Servidor: México 🇲🇽
 │ 📡 Ping: ${Date.now() - m.timestamp}ms
 │ 💾 Version: 1.3
-│ 🔒 Modo: ${isSubBot ? '🔓 PÚBLICO' : '🔐 PRIVADO'}
+│ 🔒 Modo: ${isSubBot ? (botConfig.mode === 'private' ? '🔐 PRIVADO' : '🔓 PÚBLICO') : '🔐 PRIVADO'}
 ╰───────────────╯
 
 *Creador ғᴇʀɴᴀɴᴅᴏ 👑*
 Selecciona una opción:`;
 
-  let buttons = [
-    { buttonId: usedPrefix + 'menu', buttonText: { displayText: '📜 Menú' }, type: 1 },
-    { buttonId: usedPrefix + 'nuevos', buttonText: { displayText: '📌 Actualizaciones' }, type: 1 },
-    { buttonId: usedPrefix + 'code', buttonText: { displayText: '🤖 Sup-Bot' }, type: 1 },
-    { buttonId: usedPrefix + 'creador', buttonText: { displayText: '👑 CREADOR' }, type: 1 }
-  ];
+  let buttons = []
+  
+  if (isSubBot) {
+    buttons = [
+      { buttonId: usedPrefix + 'menu', buttonText: { displayText: '📜 Menú' }, type: 1 },
+      { buttonId: usedPrefix + 'subcmd', buttonText: { displayText: '📋 Comandos' }, type: 1 },
+      { buttonId: usedPrefix + 'subconfig', buttonText: { displayText: '⚙️ Config' }, type: 1 },
+      { buttonId: usedPrefix + 'botlist', buttonText: { displayText: '📊 Bots' }, type: 1 },
+      { buttonId: usedPrefix + 'code', buttonText: { displayText: '🤖 Nuevo Sub' }, type: 1 }
+    ]
+  } else {
+    buttons = [
+      { buttonId: usedPrefix + 'menu', buttonText: { displayText: '📜 Menú' }, type: 1 },
+      { buttonId: usedPrefix + 'nuevos', buttonText: { displayText: '📌 Actualizaciones' }, type: 1 },
+      { buttonId: usedPrefix + 'code', buttonText: { displayText: '🤖 Sup-Bot' }, type: 1 },
+      { buttonId: usedPrefix + 'creador', buttonText: { displayText: '👑 CREADOR' }, type: 1 },
+      { buttonId: usedPrefix + 'menu+', buttonText: { displayText: '➕ Menu +18' }, type: 1 }
+    ]
+  }
 
   try {
     await conn.sendMessage(m.chat, {
