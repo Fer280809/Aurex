@@ -5,12 +5,14 @@ import fs from "fs"
 
 // ============= CONFIGURACIÓN DE SUBS =============
 global.supConfig = {
-  maxSubBots: 100, // Límite máximo de subbots
-  sessionTime: 45, // Tiempo de expiración QR (segundos)
-  cooldown: 120, // Cooldown entre conexiones (segundos)
-  autoClean: true, // Limpieza automática de sesiones
-  folder: "Sessions/SubBot", // Carpeta de sesiones
+  maxSubBots: 100,
+  sessionTime: 45,
+  cooldown: 120,
+  autoClean: true,
+  folder: "Sessions/SubBot",
 }
+
+global.subBotsData = new Map()
 
 // ============= PROPIETARIOS =============
 global.owner = [
@@ -69,9 +71,6 @@ global.APIs = {
   siputzx: { url: "https://api.siputzx.my.id", key: null },
   adonix: { url: "https://api-adonix.ultraplus.click", key: 'Destroy-xyz' }
 }
-
-// ============= ALMACENAMIENTO SUBS =============
-global.subBotsData = new Map() // Datos en memoria para rápido acceso
 
 // ============= WATCH FILE =============
 let file = fileURLToPath(import.meta.url)
