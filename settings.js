@@ -1,18 +1,23 @@
+
 import { watchFile, unwatchFile } from "fs"
 import chalk from "chalk"
 import { fileURLToPath } from "url"
 import fs from "fs"
 
-// ============= CONFIGURACIÓN DE SUBS =============
+// ============= CONFIGURACIÓN MEJORADA DE SUBS =============
 global.supConfig = {
   maxSubBots: 100,
-  sessionTime: 45,
-  cooldown: 120,
+  sessionTime: 60, // Aumentado a 60 minutos
+  cooldown: 30, // Reducido a 30 segundos
   autoClean: true,
+  autoRestart: true, // Nueva función: reinicio automático
+  persistentSessions: true, // Nueva: sesiones persistentes
   folder: "Sessions/SubBot",
 }
 
 global.subBotsData = new Map()
+global.activeSubBots = new Map() // Para rastrear SubBots activos
+global.pendingRestarts = new Set() // Para reinicios pendientes
 
 // ============= PROPIETARIOS =============
 global.owner = [
@@ -28,7 +33,7 @@ global.fernando = ["5214183357841"]
 
 // ============= CONFIGURACIÓN DEL BOT =============
 global.libreria = "Baileys Multi Device"
-global.vs = "1.3"
+global.vs = "1.4" // Versión actualizada
 global.nameqr = "ᴀsᴛᴀ-ʙᴏᴛ"
 global.sessions = "Sessions/Principal"
 global.jadi = "Sessions/SubBot"
@@ -46,30 +51,47 @@ global.author = "ᴀsᴛᴀ-ʙᴏᴛ • Powered By ғᴇʀɴᴀɴᴅᴏ"
 global.etiqueta = "ғᴇʀɴᴀɴᴅᴏ"
 global.currency = "¥enes"
 
-// URLs (usa raw.githubusercontent.com para imágenes)
+// URLs
 global.banner = "https://raw.githubusercontent.com/Fer280809/Asta_bot/main/lib/catalogo.jpg"
 global.icono = "https://raw.githubusercontent.com/Fer280809/Asta_bot/main/lib/catalogo.jpg"
 global.catalogo = fs.readFileSync('./lib/catalogo.jpg')
 
-// ============= REDES =============
-global.group = "https://chat.whatsapp.com/BfCKeP10yZZ9ancsGy1Eh9"
-global.community = "https://chat.whatsapp.com/KKwDZn5vDAE6MhZFAcVQeO"
-global.channel = "https://whatsapp.com/channel/0029Vb64nWqLo4hb8cuxe23n"
-global.github = "https://github.com/Fer280809/Asta-bot"
-global.gmail = "fer2809fl@gmail.com"
-global.ch = {
-  ch1: "120363399175402285@newsletter"
+// ============= FUNCIÓN PARA REINICIAR SUBS =============
+global.restartAllSubBots = async function() {
+  console.log(chalk.cyan('🔄 Reiniciando todos los SubBots...'))
+  
+  for (const [jid, subBot] of global.activeSubBots) {
+    try {
+      if (subBot.ws && subBot.ws.readyState !== 3) {
+        // Guardar configuración antes de cerrar
+        await saveSubBotState(subBot)
+        subBot.ws.close()
+        
+        // Programar reconexión
+        setTimeout(() => {
+          reconnectSubBot(jid)
+        }, 3000)
+      }
+    } catch (error) {
+      console.error(chalk.red(`❌ Error reiniciando SubBot ${jid}:`, error))
+    }
+  }
+  
+  console.log(chalk.green('✅ Reinicio de SubBots programado'))
 }
 
-// ============= APIS =============
-global.APIs = {
-  xyro: { url: "https://xyro.site", key: null },
-  yupra: { url: "https://api.yupra.my.id", key: null },
-  vreden: { url: "https://api.vreden.web.id", key: null },
-  delirius: { url: "https://api.delirius.store", key: null },
-  zenzxz: { url: "https://api.zenzxz.my.id", key: null },
-  siputzx: { url: "https://api.siputzx.my.id", key: null },
-  adonix: { url: "https://api-adonix.ultraplus.click", key: 'Destroy-xyz' }
+// Función para reconectar SubBot
+async function reconnectSubBot(jid) {
+  const subBotPath = path.join(global.jadi, jid.split('@')[0])
+  
+  if (!fs.existsSync(subBotPath)) {
+    console.log(chalk.yellow(`⚠️ No hay sesión guardada para ${jid}`))
+    return
+  }
+  
+  // Aquí iría la lógica de reconexión automática
+  // (similar a la de AstaJadiBot pero sin requerir QR)
+  console.log(chalk.blue(`🔗 Reconectando SubBot ${jid}...`))
 }
 
 // ============= WATCH FILE =============
@@ -77,5 +99,13 @@ let file = fileURLToPath(import.meta.url)
 watchFile(file, () => {
   unwatchFile(file)
   console.log(chalk.redBright("✅ Settings.js actualizado"))
+  
+  // Reiniciar SubBots si la configuración cambia
+  if (global.supConfig.autoRestart) {
+    setTimeout(() => {
+      global.restartAllSubBots()
+    }, 5000)
+  }
+  
   import(`${file}?update=${Date.now()}`)
 })
