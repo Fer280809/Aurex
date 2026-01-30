@@ -562,4 +562,4 @@ let handler = async (m, { conn, usedPrefix }) => {
 
 handler.help = ['menu', 'menú', 'help', 'start']
 handler.tags = ['main']
-handler.command = ['menu', 'menú'
+handler.command = ['menu2', 'menú
