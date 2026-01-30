@@ -11,7 +11,6 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
   const sessionId = conn.user.jid.split('@')[0]
   const configPath = path.join(global.jadi, sessionId, 'config.json')
   const logoPath = path.join(global.jadi, sessionId, 'logo.jpg')
-  const logoUrlPath = path.join(global.jadi, sessionId, 'logo_url.txt')
 
   // Cargar o crear configuración
   let config = {}
@@ -40,7 +39,7 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
       'Modo': config.mode || 'public',
       'Anti-Private': config.antiPrivate ? '✅ Activado' : '❌ Desactivado',
       'Solo Grupos': config.gponly ? '✅ Activado' : '❌ Desactivado',
-      'Logo': config.logoUrl ? '✅ URL' : (config.logo ? '✅ Local' : '🌐 Global'),
+      'Logo': config.logoUrl ? '✅ URL' : (config.logo ? '✅ Personalizado' : '🌐 Global'),
       'Dueño': config.owner ? `@${config.owner.split('@')[0]}` : 'No definido',
       'Creado': config.createdAt ? new Date(config.createdAt).toLocaleString() : 'Reciente'
     }
@@ -65,6 +64,21 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
     message += `└ ${usedPrefix}config resetlogo - Restablecer logo al global\n`
     message += `└ ${usedPrefix}config restart - Reiniciar SubBot\n`
     message += `└ ${usedPrefix}config reset - Restablecer configuración\n`
+
+    // Mostrar preview del logo actual si existe
+    try {
+      const logoBuffer = await getSubBotLogo(conn)
+      if (logoBuffer && logoBuffer.length > 100) {
+        await conn.sendMessage(m.chat, {
+          image: logoBuffer,
+          caption: message,
+          mentions: config.owner ? [config.owner] : []
+        }, { quoted: m })
+        return
+      }
+    } catch (e) {
+      console.error('Error al mostrar logo:', e)
+    }
 
     await conn.sendMessage(m.chat, { 
       text: message,
@@ -185,14 +199,20 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
         
         // Actualizar configuración
         config.logo = logoPath
-        delete config.logoUrl // Eliminar URL si existía
+        config.logoUrl = null // Limpiar URL si existía
+        config.updatedAt = new Date().toISOString()
         
-        await saveConfig(configPath, config)
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
         
         // Actualizar en memoria
         conn.subConfig = conn.subConfig || {}
         conn.subConfig.logo = logoPath
         delete conn.subConfig.logoUrl
+        
+        // Actualizar mapa global
+        if (global.subBotsData) {
+          global.subBotsData.set(configPath, config)
+        }
         
         // Enviar confirmación con preview
         await conn.sendMessage(m.chat, {
@@ -245,14 +265,20 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
         
         // Guardar URL en configuración
         config.logoUrl = value
-        config.logo = logoPath // También guardar referencia local
+        config.logo = logoPath
+        config.updatedAt = new Date().toISOString()
         
-        await saveConfig(configPath, config)
+        fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
 
         // Actualizar en memoria
         conn.subConfig = conn.subConfig || {}
         conn.subConfig.logoUrl = value
         conn.subConfig.logo = logoPath
+
+        // Actualizar mapa global
+        if (global.subBotsData) {
+          global.subBotsData.set(configPath, config)
+        }
 
         // Enviar confirmación con preview
         await conn.sendMessage(m.chat, {
@@ -273,15 +299,12 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
         fs.unlinkSync(logoPath)
       }
       
-      if (fs.existsSync(logoUrlPath)) {
-        fs.unlinkSync(logoUrlPath)
-      }
-      
       // Limpiar referencias en config
       delete config.logo
       delete config.logoUrl
+      config.updatedAt = new Date().toISOString()
       
-      await saveConfig(configPath, config)
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
       
       // Actualizar en memoria
       if (conn.subConfig) {
@@ -289,31 +312,28 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
         delete conn.subConfig.logoUrl
       }
       
+      // Actualizar mapa global
+      if (global.subBotsData) {
+        global.subBotsData.set(configPath, config)
+      }
+      
       return m.reply('✅ Logo restablecido al logo global.')
     }
 
     case 'restart': {
-      // Guardar el chat donde se solicitó el reinicio
-      const restartChat = m.chat
-      
-      // Enviar mensaje de confirmación ANTES de cerrar la conexión
       await m.reply('🔄 Reiniciando SubBot... Esto tomará unos segundos.')
       
-      // Usar setTimeout para dar tiempo al mensaje de enviarse
-      setTimeout(async () => {
+      setTimeout(() => {
         try {
-          // Cerrar la conexión del SubBot
-          if (conn.ws && conn.ws.readyState !== 3) { // 3 = CLOSED
+          // Cerrar la conexión
+          if (conn.ws && conn.ws.readyState !== 3) {
             conn.ws.close()
           }
-          
-          // Si tienes un sistema de reconexión automática, esto debería reconectar solo
           console.log(`🔄 SubBot ${conn.user.jid} reiniciado por solicitud`)
-          
         } catch (error) {
           console.error('Error al reiniciar SubBot:', error)
         }
-      }, 2000) // Esperar 2 segundos antes de cerrar
+      }, 2000)
       break
     }
 
@@ -334,15 +354,16 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
       if (fs.existsSync(logoPath)) {
         fs.unlinkSync(logoPath)
       }
-      
-      if (fs.existsSync(logoUrlPath)) {
-        fs.unlinkSync(logoUrlPath)
-      }
 
       fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2))
 
       // Actualizar en memoria
       conn.subConfig = defaultConfig
+
+      // Actualizar mapa global
+      if (global.subBotsData) {
+        global.subBotsData.set(configPath, defaultConfig)
+      }
 
       return m.reply('✅ Configuración restablecida a valores por defecto.')
     }
@@ -350,6 +371,62 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
     default: {
       return m.reply(`❌ Acción no reconocida.\nUsa ${usedPrefix}config para ver opciones.`)
     }
+  }
+}
+
+// Función para obtener el logo del SubBot (EXPORTADA)
+export async function getSubBotLogo(conn) {
+  try {
+    // Verificar si hay configuración de SubBot
+    if (conn.subConfig) {
+      // Si tiene URL de logo
+      if (conn.subConfig.logoUrl) {
+        try {
+          const response = await fetch(conn.subConfig.logoUrl, { timeout: 10000 })
+          if (response.ok) {
+            const buffer = await response.buffer()
+            if (buffer && buffer.length > 100) {
+              return buffer
+            }
+          }
+        } catch (e) {
+          console.error('Error cargando logo URL:', e)
+        }
+      }
+      
+      // Si tiene logo local
+      if (conn.subConfig.logo && fs.existsSync(conn.subConfig.logo)) {
+        try {
+          const buffer = fs.readFileSync(conn.subConfig.logo)
+          if (buffer && buffer.length > 100) {
+            return buffer
+          }
+        } catch (e) {
+          console.error('Error cargando logo local:', e)
+        }
+      }
+    }
+    
+    // Si no hay logo personalizado, usar el global
+    if (global.icono && global.icono.startsWith('http')) {
+      try {
+        const response = await fetch(global.icono, { timeout: 10000 })
+        if (response.ok) {
+          const buffer = await response.buffer()
+          if (buffer && buffer.length > 100) {
+            return buffer
+          }
+        }
+      } catch (e) {
+        console.error('Error cargando logo global:', e)
+      }
+    }
+    
+    // Usar el catalogo global como fallback
+    return global.catalogo || Buffer.alloc(0)
+  } catch (error) {
+    console.error('Error obteniendo logo:', error)
+    return global.catalogo || Buffer.alloc(0)
   }
 }
 
@@ -361,40 +438,6 @@ async function saveConfig(path, config) {
   // Actualizar en memoria global
   if (global.subBotsData) {
     global.subBotsData.set(path, config)
-  }
-}
-
-// Función para obtener el logo del SubBot
-export async function getSubBotLogo(conn) {
-  try {
-    if (conn.subConfig) {
-      // Si tiene URL de logo
-      if (conn.subConfig.logoUrl) {
-        const response = await fetch(conn.subConfig.logoUrl)
-        if (response.ok) {
-          return await response.buffer()
-        }
-      }
-      
-      // Si tiene logo local
-      if (conn.subConfig.logo && fs.existsSync(conn.subConfig.logo)) {
-        return fs.readFileSync(conn.subConfig.logo)
-      }
-    }
-    
-    // Si no hay logo personalizado, usar el global
-    if (global.icono && global.icono.startsWith('http')) {
-      const response = await fetch(global.icono)
-      if (response.ok) {
-        return await response.buffer()
-      }
-    }
-    
-    // Usar el catalogo global como fallback
-    return global.catalogo || Buffer.alloc(0)
-  } catch (error) {
-    console.error('Error obteniendo logo:', error)
-    return global.catalogo || Buffer.alloc(0)
   }
 }
 
