@@ -1,6 +1,6 @@
 process.env['NODE_TLS_REJECT_UNAUTHORIZED'] = '1'
 
-// ============= IMPORTS PRINCIPALES =============
+// ========== IMPORTS PRINCIPALES ==========
 import './settings.js'
 import './plugins/funciones/_allfake.js'
 import cfonts from 'cfonts'
@@ -29,6 +29,7 @@ const phoneUtil = PhoneNumberUtil.getInstance()
 const { DisconnectReason, useMultiFileAuthState, fetchLatestBaileysVersion, makeCacheableSignalKeyStore, jidNormalizedUser } = await import('@whiskeysockets/baileys')
 import readline from 'readline'
 import NodeCache from 'node-cache'
+import { initializeResourceSystem } from './lib/rpg/init-resources.js';
 
 // ============= VARIABLES GLOBALES =============
 if (!global.conns) global.conns = []
@@ -420,3 +421,5 @@ async function isValidPhoneNumber(number) {
     return false
   }
 }
+
+initializeResourceSystem();
