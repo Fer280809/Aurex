@@ -1,4 +1,4 @@
-import { generarBienvenida, generarDespedida } from '../_welcome.js'
+import { generarBienvenida, generarDespedida } from '../../_welcome.js'
 
 const handler = async (m, { conn, command, usedPrefix, text, groupMetadata }) => {
     const chat = global.db.data.chats[m.chat]
