@@ -1,6 +1,27 @@
 // ============================================
 // plugins/rpg/missions.js
 // ============================================
+import { missionSystem } from '../../lib/rpg/mission-system.js';
+
+// Función para formatear tiempo restante
+function formatTimeRemaining(nextReset) {
+    const now = Date.now();
+    const diff = nextReset - now;
+    
+    if (diff <= 0) return '¡Ahora mismo!';
+    
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    const parts = [];
+    if (days > 0) parts.push(`${days}d`);
+    if (hours > 0) parts.push(`${hours}h`);
+    if (minutes > 0) parts.push(`${minutes}m`);
+    
+    return parts.join(' ') || 'Pronto';
+}
+
 const handler = async (m, { conn, usedPrefix, args }) => {
     if (!global.db.data.chats[m.chat].economy && m.isGroup) {
         return m.reply(`🚫 *Economía desactivada*\n\nUn *administrador* puede activarla con:\n» *${usedPrefix}economy on*`);
@@ -10,104 +31,41 @@ const handler = async (m, { conn, usedPrefix, args }) => {
     const action = args[0]?.toLowerCase() || 'view';
     const missionType = args[1]?.toLowerCase();
 
-    // Inicializar sistema de misiones
+    // Inicializar sistema de misiones del usuario
     if (!user.inventory) {
         user.inventory = {
             missions: {
-                daily: { streak: 0, lastCompleted: 0, completed: [], rewards: {} },
-                weekly: { streak: 0, lastCompleted: 0, completed: [], rewards: {} },
-                monthly: { streak: 0, lastCompleted: 0, completed: [], rewards: {} }
+                daily: { streak: 0, lastCompleted: 0, completed: [], lastClaimed: {} },
+                weekly: { completed: [], lastClaimed: {} },
+                monthly: { completed: [], lastClaimed: {} }
             }
         };
     }
 
-    const missions = user.inventory.missions;
-    const today = new Date().toDateString();
-    const now = Date.now();
-
-    // MISIÓNES DIARIAS
-    const dailyMissions = [
-        {
-            id: 'daily_mine',
-            name: 'Minero Novato',
-            description: 'Mina 10 recursos',
-            requirement: { type: 'mine', amount: 10 },
-            reward: { coin: 500, resource: 'iron', amount: 5 }
-        },
-        {
-            id: 'daily_chop',
-            name: 'Leñador Aprendiz',
-            description: 'Tala 15 recursos',
-            requirement: { type: 'chop', amount: 15 },
-            reward: { coin: 300, resource: 'oak', amount: 10 }
-        },
-        {
-            id: 'daily_fish',
-            name: 'Pescador Principiante',
-            description: 'Pesca 8 recursos',
-            requirement: { type: 'fish', amount: 8 },
-            reward: { coin: 400, resource: 'salmon', amount: 8 }
-        },
-        {
-            id: 'daily_craft',
-            name: 'Artesano',
-            description: 'Craftea 1 item',
-            requirement: { type: 'craft', amount: 1 },
-            reward: { coin: 600, resource: 'gold', amount: 3 }
-        },
-        {
-            id: 'daily_streak_3',
-            name: 'Racha de 3 Días',
-            description: 'Completa misiones por 3 días seguidos',
-            requirement: { type: 'streak', amount: 3 },
-            reward: { coin: 1500, special: 'character_ticket' }
-        }
-    ];
-
-    // MISIÓNES SEMANALES
-    const weeklyMissions = [
-        {
-            id: 'weekly_collector',
-            name: 'Coleccionista',
-            description: 'Consigue 50 de cada recurso básico',
-            requirement: { type: 'collect', resources: ['stone', 'wood', 'fish'], amount: 50 },
-            reward: { coin: 5000, resource: 'diamond', amount: 5 }
-        },
-        {
-            id: 'weekly_crafter',
-            name: 'Maestro Artesano',
-            description: 'Craftea 5 items diferentes',
-            requirement: { type: 'craft_diverse', amount: 5 },
-            reward: { coin: 8000, special: 'diamond_pickaxe' }
-        }
-    ];
-
-    // MISIÓNES MENSUALES
-    const monthlyMissions = [
-        {
-            id: 'monthly_legend',
-            name: 'Leyenda',
-            description: 'Consigue 1000 recursos en total',
-            requirement: { type: 'total_resources', amount: 1000 },
-            reward: { coin: 25000, special: 'legendary_character', resource: 'mythril', amount: 10 }
-        },
-        {
-            id: 'monthly_tycoon',
-            name: 'Magnate',
-            description: 'Acumula ¥100,000 en el banco',
-            requirement: { type: 'bank', amount: 100000 },
-            reward: { coin: 50000, special: 'mythril_tools_set' }
-        }
-    ];
-
     // VER MISIÓNES
     if (action === 'view' || action === 'ver') {
-        let text = `📋 *SISTEMA DE MISIONES*\n\n`;
+        let text = `📋 *SISTEMA DE MISIONES DINÁMICAS* 📋\n\n`;
         
-        text += `📅 *MISIONES DIARIAS* (Racha: ${missions.daily.streak} días)\n`;
-        dailyMissions.forEach(mission => {
-            const completed = missions.daily.completed?.includes(mission.id) || false;
-            text += `${completed ? '✅' : '📌'} *${mission.name}*\n`;
+        // Tiempo restante para reset
+        const now = Date.now();
+        const dailyReset = missionSystem.lastReset.daily + (24 * 60 * 60 * 1000);
+        const weeklyReset = missionSystem.lastReset.weekly + (7 * 24 * 60 * 60 * 1000);
+        const monthlyReset = missionSystem.lastReset.monthly + (30 * 24 * 60 * 60 * 1000);
+        
+        text += `⏰ *Tiempos de reinicio:*\n`;
+        text += `▸ Diarias: ${formatTimeRemaining(dailyReset)}\n`;
+        text += `▸ Semanales: ${formatTimeRemaining(weeklyReset)}\n`;
+        text += `▸ Mensuales: ${formatTimeRemaining(monthlyReset)}\n\n`;
+        
+        // MISIÓNES DIARIAS
+        text += `📅 *MISIONES DIARIAS* (Racha: ${user.inventory.missions.daily.streak || 0} días)\n`;
+        const dailyMissions = missionSystem.getMissions('daily');
+        
+        dailyMissions.forEach((mission, index) => {
+            const completed = user.inventory.missions.daily.completed?.includes(mission.id) || false;
+            const canClaim = missionSystem.checkMissionCompletion(user, mission) && !completed;
+            
+            text += `${completed ? '✅' : canClaim ? '🎯' : '📌'} *${mission.name}*\n`;
             text += `   ${mission.description}\n`;
             text += `   Recompensa: ¥${mission.reward.coin.toLocaleString()}`;
             if (mission.reward.resource) {
@@ -119,10 +77,15 @@ const handler = async (m, { conn, usedPrefix, args }) => {
             text += `\n\n`;
         });
 
+        // MISIÓNES SEMANALES
         text += `🗓️ *MISIONES SEMANALES*\n`;
-        weeklyMissions.forEach(mission => {
-            const completed = missions.weekly.completed?.includes(mission.id) || false;
-            text += `${completed ? '✅' : '📌'} *${mission.name}*\n`;
+        const weeklyMissions = missionSystem.getMissions('weekly');
+        
+        weeklyMissions.forEach((mission, index) => {
+            const completed = user.inventory.missions.weekly.completed?.includes(mission.id) || false;
+            const canClaim = missionSystem.checkMissionCompletion(user, mission) && !completed;
+            
+            text += `${completed ? '✅' : canClaim ? '🎯' : '📌'} *${mission.name}*\n`;
             text += `   ${mission.description}\n`;
             text += `   Recompensa: ¥${mission.reward.coin.toLocaleString()}`;
             if (mission.reward.special) {
@@ -131,10 +94,15 @@ const handler = async (m, { conn, usedPrefix, args }) => {
             text += `\n\n`;
         });
 
+        // MISIÓNES MENSUALES
         text += `📊 *MISIONES MENSUALES*\n`;
-        monthlyMissions.forEach(mission => {
-            const completed = missions.monthly.completed?.includes(mission.id) || false;
-            text += `${completed ? '✅' : '📌'} *${mission.name}*\n`;
+        const monthlyMissions = missionSystem.getMissions('monthly');
+        
+        monthlyMissions.forEach((mission, index) => {
+            const completed = user.inventory.missions.monthly.completed?.includes(mission.id) || false;
+            const canClaim = missionSystem.checkMissionCompletion(user, mission) && !completed;
+            
+            text += `${completed ? '✅' : canClaim ? '🎯' : '📌'} *${mission.name}*\n`;
             text += `   ${mission.description}\n`;
             text += `   Recompensa: ¥${mission.reward.coin.toLocaleString()}`;
             if (mission.reward.special) {
@@ -143,7 +111,9 @@ const handler = async (m, { conn, usedPrefix, args }) => {
             text += `\n\n`;
         });
 
-        text += `📌 *Uso:* ${usedPrefix}mission claim [diaria/semanal/mensual] [id]`;
+        text += `📌 *Uso:* ${usedPrefix}mission claim [diaria/semanal/mensual] [número]\n`;
+        text += `📌 *Ejemplo:* ${usedPrefix}mission claim diaria 1`;
+        
         await conn.reply(m.chat, text, m);
         return;
     }
@@ -151,64 +121,60 @@ const handler = async (m, { conn, usedPrefix, args }) => {
     // RECLAMAR RECOMPENSA
     if (action === 'claim' && missionType) {
         let missionList = [];
-        let missionData = null;
+        let userMissions = null;
+        let missionIndex = parseInt(args[2]) - 1;
+        
+        if (missionIndex < 0 || isNaN(missionIndex)) {
+            return m.reply(`❌ Debes especificar el número de misión. Ejemplo: ${usedPrefix}mission claim diaria 1`);
+        }
         
         if (missionType === 'diaria' || missionType === 'daily') {
-            missionList = dailyMissions;
-            missionData = missions.daily;
+            missionList = missionSystem.getMissions('daily');
+            userMissions = user.inventory.missions.daily;
         } else if (missionType === 'semanal' || missionType === 'weekly') {
-            missionList = weeklyMissions;
-            missionData = missions.weekly;
+            missionList = missionSystem.getMissions('weekly');
+            userMissions = user.inventory.missions.weekly;
         } else if (missionType === 'mensual' || missionType === 'monthly') {
-            missionList = monthlyMissions;
-            missionData = missions.monthly;
+            missionList = missionSystem.getMissions('monthly');
+            userMissions = user.inventory.missions.monthly;
         } else {
             return m.reply(`❌ Tipo de misión no válido. Usa: diaria, semanal o mensual`);
         }
 
-        const missionId = args[2];
-        const mission = missionList.find(m => m.id === missionId);
-        
-        if (!mission) {
-            return m.reply(`❌ Misión no encontrada. Usa *${usedPrefix}mission view* para ver las misiones.`);
+        if (missionIndex >= missionList.length) {
+            return m.reply(`❌ Número de misión inválido. Solo hay ${missionList.length} misiones disponibles.`);
         }
 
-        if (missionData.completed?.includes(missionId)) {
-            return m.reply(`⚠️ Ya has reclamado esta misión.`);
+        const mission = missionList[missionIndex];
+        
+        if (userMissions.completed?.includes(mission.id)) {
+            return m.reply(`⚠️ Ya has reclamado esta misión. Espera al próximo reset.`);
         }
 
         // Verificar si se cumple la misión
-        let completed = false;
+        const completed = missionSystem.checkMissionCompletion(user, mission);
         
-        switch (mission.requirement.type) {
-            case 'mine':
-                completed = (user.minedToday || 0) >= mission.requirement.amount;
-                break;
-            case 'chop':
-                completed = (user.choppedToday || 0) >= mission.requirement.amount;
-                break;
-            case 'fish':
-                completed = (user.fishedToday || 0) >= mission.requirement.amount;
-                break;
-            case 'streak':
-                completed = missions.daily.streak >= mission.requirement.amount;
-                break;
-            case 'collect':
-                completed = mission.requirement.resources.every(res => 
-                    (user.inventory?.resources?.[res] || 0) >= mission.requirement.amount
-                );
-                break;
-            case 'bank':
-                completed = (user.bank || 0) >= mission.requirement.amount;
-                break;
-        }
-
         if (!completed) {
-            return m.reply(`❌ Aún no cumples los requisitos para esta misión.`);
+            let progressText = '';
+            switch(mission.requirement.type) {
+                case 'mine':
+                    progressText = `Progreso: ${user.minedToday || 0}/${mission.requirement.amount}`;
+                    break;
+                case 'chop':
+                    progressText = `Progreso: ${user.choppedToday || 0}/${mission.requirement.amount}`;
+                    break;
+                case 'fish':
+                    progressText = `Progreso: ${user.fishedToday || 0}/${mission.requirement.amount}`;
+                    break;
+                case 'bank':
+                    progressText = `Banco actual: ¥${(user.bank || 0).toLocaleString()}/${mission.requirement.amount.toLocaleString()}`;
+                    break;
+            }
+            return m.reply(`❌ Aún no cumples los requisitos para esta misión.\n${progressText}`);
         }
 
         // Otorgar recompensa
-        missionData.completed.push(missionId);
+        userMissions.completed.push(mission.id);
         
         // Monedas
         user.coin += mission.reward.coin;
@@ -221,23 +187,44 @@ const handler = async (m, { conn, usedPrefix, args }) => {
         }
 
         // Recompensa especial (personaje)
-        if (mission.reward.special === 'character_ticket') {
+        if (mission.reward.special && mission.reward.special.includes('character')) {
             if (!user.harem) user.harem = [];
-            // Personaje especial por racha de 3 días
+            
             const specialCharacter = {
-                id: `special_${Date.now()}`,
-                name: 'Personaje de Racha',
+                id: `mission_${mission.id}_${Date.now()}`,
+                name: getCharacterNameByMission(mission),
                 claimedAt: Date.now(),
-                from: 'daily_streak',
-                rarity: 'epic'
+                from: `${missionType}_mission`,
+                rarity: missionType === 'mensual' ? 'legendary' : 
+                       missionType === 'semanal' ? 'epic' : 'rare'
             };
             user.harem.push(specialCharacter);
         }
 
         // Incrementar racha para misiones diarias
         if (missionType === 'diaria' || missionType === 'daily') {
-            missions.daily.streak += 1;
-            missions.daily.lastCompleted = now;
+            user.inventory.missions.daily.streak = (user.inventory.missions.daily.streak || 0) + 1;
+            user.inventory.missions.daily.lastCompleted = Date.now();
+            
+            // Verificar racha de 3 días para personaje especial
+            if (user.inventory.missions.daily.streak >= 3 && 
+                !user.inventory.missions.daily.completed.includes('streak_reward_3')) {
+                
+                user.inventory.missions.daily.completed.push('streak_reward_3');
+                
+                const streakCharacter = {
+                    id: `streak_3_${Date.now()}`,
+                    name: 'Personaje de Racha Dorada',
+                    claimedAt: Date.now(),
+                    from: '3_day_streak',
+                    rarity: 'epic'
+                };
+                user.harem.push(streakCharacter);
+                
+                await m.reply(`🎉 ¡Misión completada y racha de 3 días alcanzada!\n\nRecompensas:\n💰 ¥${mission.reward.coin.toLocaleString()}\n${mission.reward.resource ? `📦 ${mission.reward.amount}x ${mission.reward.resource}\n` : ''}${mission.reward.special ? `🎁 ${mission.reward.special.replace('_', ' ')}\n` : ''}✨ *Bonus Racha:* ¡Personaje épico obtenido!`);
+                await global.db.write();
+                return;
+            }
         }
 
         await m.reply(`🎉 ¡Misión completada!\n\nRecompensas:\n💰 ¥${mission.reward.coin.toLocaleString()}\n${mission.reward.resource ? `📦 ${mission.reward.amount}x ${mission.reward.resource}\n` : ''}${mission.reward.special ? `🎁 ${mission.reward.special.replace('_', ' ')}\n` : ''}`);
@@ -245,25 +232,58 @@ const handler = async (m, { conn, usedPrefix, args }) => {
         return;
     }
 
-    // REINICIAR MISIÓNES DIARIAS (solo para owners)
-    if (action === 'reset' && global.owner && global.owner.includes(m.sender)) {
-        Object.values(global.db.data.users).forEach(u => {
-            if (u.inventory?.missions) {
-                const today = new Date().toDateString();
-                if (u.inventory.missions.daily.lastCompleted !== today) {
-                    u.inventory.missions.daily.completed = [];
-                    u.minedToday = 0;
-                    u.choppedToday = 0;
-                    u.fishedToday = 0;
-                }
-            }
-        });
-        await m.reply(`✅ Misiones diarias reiniciadas para todos los usuarios.`);
+    // REINICIAR MANUALMENTE (solo para owners)
+    if (action === 'reset' && global.owner && global.owner.includes(m.sender.split('@')[0])) {
+        const type = args[1];
+        if (type === 'daily' || type === 'all') {
+            missionSystem.dailyMissions = missionSystem.generateRandomMissions('daily', 3);
+            missionSystem.lastReset.daily = Date.now();
+        }
+        if (type === 'weekly' || type === 'all') {
+            missionSystem.weeklyMissions = missionSystem.generateRandomMissions('weekly', 2);
+            missionSystem.lastReset.weekly = Date.now();
+        }
+        if (type === 'monthly' || type === 'all') {
+            missionSystem.monthlyMissions = missionSystem.generateRandomMissions('monthly', 2);
+            missionSystem.lastReset.monthly = Date.now();
+        }
+        
+        await m.reply(`✅ Misiones ${type === 'all' ? 'todas' : type} reiniciadas. Nuevas misiones generadas.`);
         return;
     }
 
-    await conn.reply(m.chat, `📌 *Uso:* ${usedPrefix}mission [view/claim/reset]\n📌 *Ejemplo:* ${usedPrefix}mission claim diaria daily_mine`, m);
+    // VER PROGRESO
+    if (action === 'progress' || action === 'progreso') {
+        let text = `📊 *TU PROGRESO DIARIO*\n\n`;
+        text += `⛏️ Minado hoy: ${user.minedToday || 0}\n`;
+        text += `🪓 Talado hoy: ${user.choppedToday || 0}\n`;
+        text += `🎣 Pesca hoy: ${user.fishedToday || 0}\n`;
+        text += `⚒️ Crafteado hoy: ${user.craftedToday || 0}\n`;
+        text += `💰 Vendido hoy: ${user.soldToday || 0}\n\n`;
+        text += `🏦 Banco: ¥${(user.bank || 0).toLocaleString()}\n`;
+        text += `🔥 Racha diaria: ${user.inventory.missions.daily.streak || 0} días\n`;
+        
+        await conn.reply(m.chat, text, m);
+        return;
+    }
+
+    await conn.reply(m.chat, `📌 *Uso:* ${usedPrefix}mission [view/claim/progress/reset]\n📌 *Ejemplos:*\n» ${usedPrefix}mission view\n» ${usedPrefix}mission claim diaria 1\n» ${usedPrefix}mission progress\n» ${usedPrefix}mission reset daily (owner only)`, m);
 };
+
+// Función para nombres de personajes según misión
+function getCharacterNameByMission(mission) {
+    const type = mission.type;
+    const names = {
+        'mine': ['Minero Experto', 'Excavador de Tesoros', 'Picapedrero Maestro'],
+        'chop': ['Leñador del Bosque', 'Talador Supremo', 'Guardabosques'],
+        'fish': ['Pescador Legendario', 'Cazador de Profundidades', 'Marinero de Alta Mar'],
+        'craft': ['Artesano Maestro', 'Forjador Legendario', 'Creador Supremo'],
+        'collect': ['Coleccionista de Tesoros', 'Recolector Épico', 'Atesorador Supremo']
+    };
+    
+    const list = names[type] || ['Aventurero', 'Héroe', 'Campeón'];
+    return list[Math.floor(Math.random() * list.length)];
+}
 
 handler.help = ['mission', 'misiones', 'quest'];
 handler.tags = ['rpg'];
