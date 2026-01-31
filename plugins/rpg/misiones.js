@@ -1,10 +1,10 @@
 // ============================================
-// plugins/rpg/missions.js (VERSIÓN SIMPLE Y FUNCIONAL)
+// plugins/rpg/missions.js
 // ============================================
 
-const handler = async (m, { conn, usedPrefix }) => {
+const handler = async (m, { conn, usedPrefix, command, text }) => {
     // Verificar si economía está activada
-    if (!global.db.data.chats[m.chat].economy && m.isGroup) {
+    if (m.isGroup && (!global.db.data.chats[m.chat] || !global.db.data.chats[m.chat].economy)) {
         return m.reply(`🚫 *Economía desactivada*\n\nUn *administrador* puede activarla con:\n» *${usedPrefix}economy on*`);
     }
 
@@ -29,190 +29,245 @@ const handler = async (m, { conn, usedPrefix }) => {
         };
     }
     
-    // Asegurar que inventory existe
-    if (!user.inventory) {
-        user.inventory = {
-            resources: {},
-            tools: { pickaxe: 'basic', axe: 'basic', fishingRod: 'basic' },
-            durability: { pickaxe: 100, axe: 100, fishingRod: 100 },
-            missions: {
-                daily: { streak: 0, completed: [] },
-                weekly: { completed: [] },
-                monthly: { completed: [] }
-            }
-        };
-    }
+    // Asegurar estructura
+    if (!user.inventory) user.inventory = {};
+    if (!user.inventory.missions) user.inventory.missions = {};
+    if (!user.inventory.missions.daily) user.inventory.missions.daily = { streak: 0, completed: [] };
+    if (!user.inventory.missions.weekly) user.inventory.missions.weekly = { completed: [] };
+    if (!user.inventory.missions.monthly) user.inventory.missions.monthly = { completed: [] };
     
-    // Asegurar que misiones existen
-    if (!user.inventory.missions) {
-        user.inventory.missions = {
-            daily: { streak: 0, completed: [] },
-            weekly: { completed: [] },
-            monthly: { completed: [] }
-        };
-    }
+    // Inicializar tracking diario
+    user.minedToday = user.minedToday || 0;
+    user.choppedToday = user.choppedToday || 0;
+    user.fishedToday = user.fishedToday || 0;
+    user.craftedToday = user.craftedToday || 0;
+    user.soldToday = user.soldToday || 0;
+    user.coin = user.coin || 1000;
 
-    // Obtener argumentos
-    const args = m.text.slice(usedPrefix.length).trim().split(/ +/);
+    // Obtener argumentos CORRECTAMENTE
+    const args = text ? text.trim().split(/ +/) : [];
     const action = args[0]?.toLowerCase();
-    
-    // MISIÓNES DISPONIBLES (versión simple)
+
+    // MISIÓNES DISPONIBLES
     const dailyMissions = [
         {
             id: 'mine_10',
-            name: 'Minero Principiante',
+            name: '⛏️ Minero Principiante',
             description: 'Mina 10 recursos',
             requirement: { type: 'mine', amount: 10 },
-            reward: { coin: 500, resource: 'stone', amount: 5 }
+            reward: { coin: 500, resource: 'stone', amount: 5, emoji: '🪨' }
         },
         {
             id: 'chop_15',
-            name: 'Leñador Aprendiz',
+            name: '🪓 Leñador Aprendiz',
             description: 'Tala 15 recursos',
             requirement: { type: 'chop', amount: 15 },
-            reward: { coin: 300, resource: 'wood', amount: 10 }
+            reward: { coin: 300, resource: 'wood', amount: 10, emoji: '🪵' }
         },
         {
             id: 'fish_8',
-            name: 'Pescador Novato',
+            name: '🎣 Pescador Novato',
             description: 'Pesca 8 recursos',
             requirement: { type: 'fish', amount: 8 },
-            reward: { coin: 400, resource: 'fish', amount: 8 }
+            reward: { coin: 400, resource: 'salmon', amount: 8, emoji: '🐠' }
+        },
+        {
+            id: 'craft_3',
+            name: '⚒️ Artesano',
+            description: 'Craftea 3 items',
+            requirement: { type: 'craft', amount: 3 },
+            reward: { coin: 600, resource: 'iron', amount: 3, emoji: '⚙️' }
+        },
+        {
+            id: 'sell_20',
+            name: '💰 Vendedor',
+            description: 'Vende 20 recursos',
+            requirement: { type: 'sell', amount: 20 },
+            reward: { coin: 450, resource: 'gold', amount: 2, emoji: '🟡' }
         }
     ];
 
-    // VER MISIÓNES
-    if (!action || action === 'ver' || action === 'view') {
-        let text = `📋 *SISTEMA DE MISIONES*\n\n`;
+    // FUNCIÓN para verificar misión
+    const checkMissionProgress = (user, mission) => {
+        switch(mission.requirement.type) {
+            case 'mine':
+                return (user.minedToday || 0) >= mission.requirement.amount;
+            case 'chop':
+                return (user.choppedToday || 0) >= mission.requirement.amount;
+            case 'fish':
+                return (user.fishedToday || 0) >= mission.requirement.amount;
+            case 'craft':
+                return (user.craftedToday || 0) >= mission.requirement.amount;
+            case 'sell':
+                return (user.soldToday || 0) >= mission.requirement.amount;
+            default:
+                return false;
+        }
+    };
+
+    // FUNCIÓN para obtener progreso
+    const getMissionProgress = (user, mission) => {
+        switch(mission.requirement.type) {
+            case 'mine': return user.minedToday || 0;
+            case 'chop': return user.choppedToday || 0;
+            case 'fish': return user.fishedToday || 0;
+            case 'craft': return user.craftedToday || 0;
+            case 'sell': return user.soldToday || 0;
+            default: return 0;
+        }
+    };
+
+    // --- SIN ARGUMENTOS: MOSTRAR MISIONES ---
+    if (!action) {
+        let text = `╭━━━━━━━━━━━━━━━━━━━━━╮
+┃   📋 *MISIONES DIARIAS*   📋
+┃━━━━━━━━━━━━━━━━━━━━━┃
+👤 *Usuario:* ${await conn.getName(m.sender)}
+📅 *Racha:* ${user.inventory.missions.daily.streak || 0} día${(user.inventory.missions.daily.streak || 0) !== 1 ? 's' : ''}
+💰 *Monedas:* ¥${(user.coin || 0).toLocaleString()}\n\n`;
+
+        text += `📊 *TU PROGRESO HOY:*\n`;
+        text += `⛏️ Minado: ${user.minedToday || 0}\n`;
+        text += `🪓 Talado: ${user.choppedToday || 0}\n`;
+        text += `🎣 Pesca: ${user.fishedToday || 0}\n`;
+        text += `⚒️ Crafteo: ${user.craftedToday || 0}\n`;
+        text += `💰 Ventas: ${user.soldToday || 0}\n\n`;
+
+        text += `🎯 *MISIONES DISPONIBLES:*\n\n`;
         
-        // Información del usuario
-        const streak = user.inventory.missions.daily.streak || 0;
-        text += `📅 *Racha actual:* ${streak} día${streak !== 1 ? 's' : ''}\n`;
-        text += `💰 *Monedas:* ¥${(user.coin || 0).toLocaleString()}\n`;
-        text += `⛏️ *Minado hoy:* ${user.minedToday || 0}\n`;
-        text += `🪓 *Talado hoy:* ${user.choppedToday || 0}\n`;
-        text += `🎣 *Pesca hoy:* ${user.fishedToday || 0}\n\n`;
-        
-        text += `📝 *MISIONES DIARIAS DISPONIBLES:*\n\n`;
-        
-        dailyMissions.forEach(mission => {
+        dailyMissions.forEach((mission, index) => {
             const completed = user.inventory.missions.daily.completed?.includes(mission.id) || false;
+            const progress = getMissionProgress(user, mission);
+            const total = mission.requirement.amount;
             const canClaim = checkMissionProgress(user, mission);
             
-            text += `${completed ? '✅' : canClaim ? '🎯' : '📌'} *${mission.name}*\n`;
+            // Barra de progreso
+            const percentage = Math.min(Math.floor((progress / total) * 100), 100);
+            const barLength = 10;
+            const filled = Math.floor((percentage / 100) * barLength);
+            const bar = '█'.repeat(filled) + '░'.repeat(barLength - filled);
+            
+            text += `${completed ? '✅' : canClaim ? '🎯' : '📌'} *${index + 1}. ${mission.name}*\n`;
             text += `   ${mission.description}\n`;
-            text += `   Recompensa: ¥${mission.reward.coin.toLocaleString()}`;
-            if (mission.reward.resource) {
-                text += ` + ${mission.reward.amount}x ${mission.reward.resource}`;
-            }
-            text += `\n   Estado: ${completed ? 'COMPLETADA' : canClaim ? 'LISTA PARA RECLAMAR' : 'EN PROGRESO'}\n\n`;
+            text += `   [${bar}] ${percentage}% (${progress}/${total})\n`;
+            text += `   🎁 Recompensa: ¥${mission.reward.coin.toLocaleString()} + ${mission.reward.amount}x ${mission.reward.emoji}\n\n`;
         });
-        
-        text += `📌 *Comandos disponibles:*\n`;
-        text += `» ${usedPrefix}mission claim [número] - Reclamar misión\n`;
-        text += `» ${usedPrefix}mission progress - Ver tu progreso\n`;
-        text += `» ${usedPrefix}mission reset - Resetear misiones (owner)\n`;
-        
+
+        text += `╰━━━━━━━━━━━━━━━━━━━━━╯\n`;
+        text += `📌 *Comandos:* ${usedPrefix}mission claim [1-5] | ${usedPrefix}mission progress`;
+
         await conn.reply(m.chat, text, m);
         return;
     }
 
+    // --- CON ARGUMENTOS ---
+    
     // RECLAMAR MISIÓN
     if (action === 'claim' || action === 'reclamar') {
-        const missionNumber = parseInt(args[1]) || 1;
+        const missionNumber = parseInt(args[1]);
         
-        if (missionNumber < 1 || missionNumber > dailyMissions.length) {
-            return m.reply(`❌ Número de misión inválido. Usa del 1 al ${dailyMissions.length}`);
+        if (isNaN(missionNumber) || missionNumber < 1 || missionNumber > dailyMissions.length) {
+            return m.reply(`❌ Número inválido. Usa: *${usedPrefix}mission claim [1-${dailyMissions.length}]*\nEjemplo: *${usedPrefix}mission claim 1*`);
         }
         
-        const mission = dailyMissions[missionNumber - 1];
+        const missionIndex = missionNumber - 1;
+        const mission = dailyMissions[missionIndex];
         
-        // Verificar si ya la completó
+        // Verificar si ya completó
         if (user.inventory.missions.daily.completed?.includes(mission.id)) {
-            return m.reply(`⚠️ Ya has reclamado esta misión hoy.`);
+            return m.reply(`⚠️ *Ya reclamaste esta misión hoy!*\nEspera al próximo día para nuevas misiones.`);
         }
         
-        // Verificar progreso
-        const canClaim = checkMissionProgress(user, mission);
-        
-        if (!canClaim) {
-            let progressText = '';
-            switch(mission.requirement.type) {
-                case 'mine':
-                    progressText = `Progreso: ${user.minedToday || 0}/${mission.requirement.amount}`;
-                    break;
-                case 'chop':
-                    progressText = `Progreso: ${user.choppedToday || 0}/${mission.requirement.amount}`;
-                    break;
-                case 'fish':
-                    progressText = `Progreso: ${user.fishedToday || 0}/${mission.requirement.amount}`;
-                    break;
-            }
-            return m.reply(`❌ Aún no cumples los requisitos.\n${progressText}`);
+        // Verificar si cumple requisitos
+        if (!checkMissionProgress(user, mission)) {
+            const progress = getMissionProgress(user, mission);
+            const needed = mission.requirement.amount - progress;
+            
+            return m.reply(`❌ *Aún no completas la misión!*\nTe faltan ${needed} ${mission.requirement.type === 'mine' ? 'recursos minados' : 
+                          mission.requirement.type === 'chop' ? 'recursos talados' : 
+                          mission.requirement.type === 'fish' ? 'peces pescados' : 
+                          mission.requirement.type === 'craft' ? 'items crafteados' : 'recursos vendidos'}.`);
         }
         
-        // Otorgar recompensa
+        // OTORGAR RECOMPENSAS
         user.inventory.missions.daily.completed.push(mission.id);
-        
-        // Monedas
         user.coin += mission.reward.coin;
         
-        // Recurso especial
+        // Agregar recurso al inventario
         if (mission.reward.resource) {
             if (!user.inventory.resources) user.inventory.resources = {};
             user.inventory.resources[mission.reward.resource] = 
                 (user.inventory.resources[mission.reward.resource] || 0) + mission.reward.amount;
         }
         
-        // Incrementar racha si es la primera misión del día
+        // Incrementar racha si es primera misión del día
         if (user.inventory.missions.daily.completed.length === 1) {
             user.inventory.missions.daily.streak = (user.inventory.missions.daily.streak || 0) + 1;
-            
-            // Recompensa especial por racha de 3 días
-            if (user.inventory.missions.daily.streak >= 3) {
-                user.coin += 1000;
-                await m.reply(`🎉 ¡Misión completada y racha de ${user.inventory.missions.daily.streak} días!\n\n✨ *Bonus Racha:* +¥1,000\n💰 Recompensa: ¥${mission.reward.coin.toLocaleString()}\n📦 +${mission.reward.amount}x ${mission.reward.resource}`);
-                await global.db.write();
-                return;
-            }
         }
         
-        await m.reply(`🎉 ¡Misión completada!\n\n💰 Recompensa: ¥${mission.reward.coin.toLocaleString()}\n📦 +${mission.reward.amount}x ${mission.reward.resource}`);
+        // BONUS POR RACHA
+        let bonusText = '';
+        const streak = user.inventory.missions.daily.streak || 0;
+        
+        if (streak >= 3) {
+            const bonus = Math.floor(mission.reward.coin * 0.5); // 50% extra
+            user.coin += bonus;
+            bonusText = `\n✨ *Bonus racha x${streak}:* +¥${bonus.toLocaleString()}`;
+        }
+        
+        await m.reply(`🎉 *¡MISIÓN COMPLETADA!*\n\n` +
+                     `✅ ${mission.name}\n` +
+                     `💰 Recompensa: ¥${mission.reward.coin.toLocaleString()}\n` +
+                     `📦 ${mission.reward.emoji} ${mission.reward.amount}x ${mission.reward.resource}\n` +
+                     `📅 Racha actual: ${streak} día${streak !== 1 ? 's' : ''}` +
+                     bonusText);
+        
         await global.db.write();
         return;
     }
 
     // VER PROGRESO
     if (action === 'progress' || action === 'progreso') {
-        let text = `📊 *TU PROGRESO ACTUAL*\n\n`;
+        let text = `╭━━━━━━━━━━━━━━━━━━━━━╮
+┃    📊 *TU PROGRESO*    📊
+┃━━━━━━━━━━━━━━━━━━━━━┃\n`;
+
+        text += `📈 *ESTADÍSTICAS DIARIAS:*\n\n`;
+        text += `⛏️  Minado: ${user.minedToday || 0}\n`;
+        text += `🪓  Talado: ${user.choppedToday || 0}\n`;
+        text += `🎣  Pesca: ${user.fishedToday || 0}\n`;
+        text += `⚒️  Crafteo: ${user.craftedToday || 0}\n`;
+        text += `💰  Ventas: ${user.soldToday || 0}\n\n`;
         
-        text += `⛏️ *Minado hoy:* ${user.minedToday || 0}\n`;
-        text += `🪓 *Talado hoy:* ${user.choppedToday || 0}\n`;
-        text += `🎣 *Pesca hoy:* ${user.fishedToday || 0}\n`;
-        text += `⚒️ *Crafteado hoy:* ${user.craftedToday || 0}\n`;
-        text += `💰 *Vendido hoy:* ${user.soldToday || 0}\n\n`;
+        text += `🏆 *LOGROS:*\n`;
+        text += `📅 Racha actual: ${user.inventory.missions.daily.streak || 0} día${(user.inventory.missions.daily.streak || 0) !== 1 ? 's' : ''}\n`;
+        text += `✅ Misiones hoy: ${user.inventory.missions.daily.completed?.length || 0}/${dailyMissions.length}\n`;
+        text += `💰 Monedas: ¥${(user.coin || 0).toLocaleString()}\n\n`;
         
-        text += `📅 *Estadísticas:*\n`;
-        text += `• Racha diaria: ${user.inventory.missions.daily.streak || 0} día${(user.inventory.missions.daily.streak || 0) !== 1 ? 's' : ''}\n`;
-        text += `• Misiones completadas hoy: ${user.inventory.missions.daily.completed?.length || 0}/3\n`;
-        text += `• Monedas totales: ¥${(user.coin || 0).toLocaleString()}\n`;
-        text += `• Salud: ${user.health || 100}/100\n\n`;
+        // Progreso de cada misión
+        text += `🎯 *PROGRESO POR MISIÓN:*\n`;
+        dailyMissions.forEach((mission, index) => {
+            const progress = getMissionProgress(user, mission);
+            const total = mission.requirement.amount;
+            const percentage = Math.min(Math.floor((progress / total) * 100), 100);
+            
+            text += `${index + 1}. ${mission.name.split(' ')[1]}: ${progress}/${total} (${percentage}%)\n`;
+        });
         
-        text += `💡 *Consejo:* Completa las 3 misiones diarias para mantener tu racha y obtener bonificaciones especiales.`;
-        
+        text += `╰━━━━━━━━━━━━━━━━━━━━━╯`;
+
         await conn.reply(m.chat, text, m);
         return;
     }
 
-    // RESET (solo para owners)
+    // RESET (solo owners)
     if (action === 'reset') {
-        // Verificar si es owner
         const senderNumber = m.sender.split('@')[0];
         if (!global.owner || !global.owner.includes(senderNumber)) {
-            return m.reply(`❌ Solo los owners pueden usar este comando.`);
+            return m.reply(`❌ Comando solo para owners.`);
         }
         
-        // Resetear estadísticas diarias
+        // Resetear todo
         user.minedToday = 0;
         user.choppedToday = 0;
         user.fishedToday = 0;
@@ -220,37 +275,40 @@ const handler = async (m, { conn, usedPrefix }) => {
         user.soldToday = 0;
         user.inventory.missions.daily.completed = [];
         
-        await m.reply(`✅ Estadísticas diarias reseteadas para ${await conn.getName(m.sender)}`);
+        await m.reply(`✅ *Estadísticas reseteadas*\nTodo el progreso diario ha sido reiniciado.`);
         await global.db.write();
         return;
     }
 
-    // Si no se reconoce el comando, mostrar ayuda
+    // HELP
+    if (action === 'help' || action === 'ayuda') {
+        await conn.reply(m.chat, 
+            `📘 *AYUDA - SISTEMA DE MISIONES*\n\n` +
+            `📌 *Comandos disponibles:*\n` +
+            `» ${usedPrefix}mission - Ver todas las misiones\n` +
+            `» ${usedPrefix}mission claim [1-5] - Reclamar misión\n` +
+            `» ${usedPrefix}mission progress - Ver tu progreso\n` +
+            `» ${usedPrefix}mission reset - Resetear (solo owners)\n\n` +
+            `🎯 *Ejemplos:*\n` +
+            `• ${usedPrefix}mission\n` +
+            `• ${usedPrefix}mission claim 1\n` +
+            `• ${usedPrefix}mission progress\n\n` +
+            `💰 *Recompensas:*\n` +
+            `• Monedas para gastar en la tienda\n` +
+            `• Recursos para craftear\n` +
+            `• Bonus por racha de días\n\n` +
+            `🔥 *Consejo:* Completa las 5 misiones diarias para maximizar tus ganancias!`,
+        m);
+        return;
+    }
+
+    // Si el argumento no es reconocido, mostrar misiones
     await conn.reply(m.chat, 
-        `📌 *Uso del comando mission:*\n\n` +
-        `» ${usedPrefix}mission - Ver misiones disponibles\n` +
-        `» ${usedPrefix}mission claim [1-3] - Reclamar misión\n` +
-        `» ${usedPrefix}mission progress - Ver tu progreso\n` +
-        `» ${usedPrefix}mission reset - Resetear (solo owners)\n\n` +
-        `*Ejemplos:*\n` +
-        `» ${usedPrefix}mission claim 1\n` +
-        `» ${usedPrefix}mission progress`,
+        `❓ *Argumento no reconocido:* "${action}"\n\n` +
+        `Usa *${usedPrefix}mission* para ver las misiones disponibles\n` +
+        `o *${usedPrefix}mission help* para ver ayuda completa.`,
     m);
 };
-
-// Función para verificar progreso de misión
-function checkMissionProgress(user, mission) {
-    switch(mission.requirement.type) {
-        case 'mine':
-            return (user.minedToday || 0) >= mission.requirement.amount;
-        case 'chop':
-            return (user.choppedToday || 0) >= mission.requirement.amount;
-        case 'fish':
-            return (user.fishedToday || 0) >= mission.requirement.amount;
-        default:
-            return false;
-    }
-}
 
 // Configuración del handler
 handler.help = ['mission', 'misiones', 'quest'];
