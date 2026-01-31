@@ -517,7 +517,7 @@ let handler = async (m, { conn, usedPrefix }) => {
 ╰┈➤ 🎥 *#xnxx / #xnxxdl* + [Link]
         ╰┈➤ Descargar un video de Xnxx  
 ╰┈➤ 💦 *#mamada*  
-        ╰┈➤ manda un video de mamando`
+        ╰┈➤ manda un video de mamando`;
 
     const buttons = [
       { 
