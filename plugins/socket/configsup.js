@@ -1,3 +1,4 @@
+
 import fs from 'fs'
 import path from 'path'
 import fetch from 'node-fetch'
@@ -20,7 +21,7 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
     config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
   }
 
-  // Verificar permisos
+  // Verificar permisos - Solo dueño o Fernando
   const isOwner = config.owner === m.sender
   const isFernando = global.fernando
     .map(v => v.replace(/\D/g, "") + "@s.whatsapp.net")
@@ -38,6 +39,7 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
     const currentConfig = {
       'Nombre': config.name || conn.user.name || 'SubBot',
       'Prefijo': config.prefix || global.prefix,
+      'Sin Prefijo': config.sinprefix ? '✅ Activado' : '❌ Desactivado',
       'Modo': config.mode || 'public',
       'Anti-Private': config.antiPrivate ? '✅ Activado' : '❌ Desactivado',
       'Solo Grupos': config.gponly ? '✅ Activado' : '❌ Desactivado',
@@ -59,12 +61,12 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
 
     message += `\n📝 *Comandos de configuración:*\n`
     message += `└ ${usedPrefix}config prefix <nuevo> - Cambiar prefijo\n`
+    message += `└ ${usedPrefix}config sinprefix <on/off> - Activar/desactivar sin prefijo\n`
     message += `└ ${usedPrefix}config name <nombre> - Cambiar nombre\n`
     message += `└ ${usedPrefix}config mode <public/private> - Cambiar modo\n`
     message += `└ ${usedPrefix}config antiprivate <on/off> - Anti mensajes privados\n`
     message += `└ ${usedPrefix}config gponly <on/off> - Solo grupos\n`
-    message += `└ ${usedPrefix}config logo - Cambiar logo (responder a imagen)\n`
-    message += `└ ${usedPrefix}config logourl <url> - Establecer logo desde URL\n`
+    message += `└ ${usedPrefix}config logo [url/imagen] - Cambiar logo (URL o responder imagen)\n`
     message += `└ ${usedPrefix}config resetlogo - Restablecer logo al global\n`
     message += `└ ${usedPrefix}config autoreconnect <on/off> - Auto-reconexión\n`
     message += `└ ${usedPrefix}config restart - Reiniciar SubBot (con reconexión)\n`
@@ -108,6 +110,22 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
 
       await saveConfig(configPath, config)
       return m.reply(`✅ Prefijo cambiado:\nDe: \`${oldPrefix}\`\nA: \`${value}\``)
+    }
+
+    case 'sinprefix': {
+      const state = value?.toLowerCase()
+      if (!state || !['on', 'off'].includes(state)) {
+        return m.reply(`⚠️ Uso: ${usedPrefix}config sinprefix <on/off>\n\nActiva o desactiva responder sin prefijo.`)
+      }
+
+      config.sinprefix = state === 'on'
+
+      // Actualizar en el socket
+      conn.subConfig = conn.subConfig || {}
+      conn.subConfig.sinprefix = state === 'on'
+
+      await saveConfig(configPath, config)
+      return m.reply(`✅ Responder sin prefijo ${state === 'on' ? 'activado' : 'desactivado'}`)
     }
 
     case 'name': {
@@ -194,14 +212,69 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
     }
 
     case 'logo': {
-      // Verificar si hay imagen
+      // Verificar si se proporciona URL o imagen
       const quoted = m.quoted || m
-      if (!quoted || !quoted.mtype || !quoted.mtype.includes('image')) {
-        return m.reply(`⚠️ Responde a una imagen para establecer como logo.\n\nTambién puedes usar: ${usedPrefix}config logourl <url>`)
+      const hasImage = quoted && quoted.mtype && quoted.mtype.includes('image')
+      const hasUrl = value && value.startsWith('http')
+
+      if (!hasImage && !hasUrl) {
+        // Mostrar logo actual
+        try {
+          const logoBuffer = await getSubBotLogo(conn)
+          if (logoBuffer && logoBuffer.length > 100) {
+            let caption = '🖼️ *LOGO ACTUAL*\n\n'
+            if (config.logoUrl) {
+              caption += `• *Tipo:* URL\n• *Origen:* ${config.logoUrl.substring(0, 40)}...`
+            } else if (config.logo) {
+              caption += `• *Tipo:* Imagen local\n• *Ruta:* ${config.logo}`
+            } else {
+              caption += `• *Tipo:* Logo global`
+            }
+            
+            caption += `\n\nPara cambiar el logo:\n1. Responde a una imagen con ${usedPrefix}config logo\n2. O usa ${usedPrefix}config logo <url>`
+            
+            await conn.sendMessage(m.chat, {
+              image: logoBuffer,
+              caption: caption
+            }, { quoted: m })
+          } else {
+            return m.reply('⚠️ No hay logo configurado. Para agregar uno:\n\n1. Responde a una imagen con este comando\n2. O usa: *config logo <url>*')
+          }
+          return
+        } catch (e) {
+          console.error(e)
+        }
       }
 
       try {
-        await m.reply('📥 Descargando imagen...')
+        let buffer, sourceType, sourceInfo
+
+        if (hasUrl) {
+          // Descargar desde URL
+          await m.reply('📥 Descargando imagen desde URL...')
+          
+          const response = await fetch(value)
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          }
+
+          const contentType = response.headers.get('content-type')
+          if (!contentType || !contentType.startsWith('image/')) {
+            return m.reply('❌ La URL no apunta a una imagen válida.')
+          }
+
+          buffer = await response.buffer()
+          sourceType = 'URL'
+          sourceInfo = value.substring(0, 50) + '...'
+        } else if (hasImage) {
+          // Descargar imagen etiquetada
+          await m.reply('📥 Descargando imagen...')
+          buffer = await quoted.download()
+          sourceType = 'Imagen etiquetada'
+          sourceInfo = 'Desde mensaje'
+        } else {
+          return m.reply(`⚠️ Uso: ${usedPrefix}config logo [url]\nO responde a una imagen con este comando.`)
+        }
 
         // Crear directorio si no existe
         const dirPath = path.dirname(logoPath)
@@ -209,88 +282,28 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
           fs.mkdirSync(dirPath, { recursive: true })
         }
 
-        // Descargar imagen
-        const buffer = await quoted.download()
-
-        // Guardar archivo
+        // Guardar imagen
         fs.writeFileSync(logoPath, buffer)
 
         // Actualizar configuración
-        config.logo = logoPath
-        config.logoUrl = null // Limpiar URL si existía
+        if (hasUrl) {
+          config.logoUrl = value
+          config.logo = logoPath
+        } else {
+          config.logo = logoPath
+          config.logoUrl = null
+        }
+        
         config.updatedAt = new Date().toISOString()
 
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
+        // Guardar configuración
+        await saveConfig(configPath, config)
 
         // Actualizar en memoria
         conn.subConfig = conn.subConfig || {}
-        conn.subConfig.logo = logoPath
-        delete conn.subConfig.logoUrl
-
-        // Actualizar mapa global
-        if (global.subBotsData) {
-          global.subBotsData.set(configPath, config)
+        if (hasUrl) {
+          conn.subConfig.logoUrl = value
         }
-
-        // Enviar confirmación con preview
-        await conn.sendMessage(m.chat, {
-          image: buffer,
-          caption: '✅ Logo actualizado correctamente para este SubBot\n\n*Tipo:* Imagen local'
-        }, { quoted: m })
-
-      } catch (error) {
-        console.error(error)
-        return m.reply('❌ Error al procesar la imagen. Asegúrate de que sea una imagen válida.')
-      }
-      break
-    }
-
-    case 'logourl': {
-      if (!value) {
-        return m.reply(`⚠️ Uso: ${usedPrefix}config logourl <url>\n\nEjemplo: ${usedPrefix}config logourl https://ejemplo.com/logo.jpg`)
-      }
-
-      try {
-        // Validar URL
-        if (!value.startsWith('http')) {
-          return m.reply('❌ URL inválida. Debe comenzar con http:// o https://')
-        }
-
-        await m.reply('📥 Descargando imagen desde URL...')
-
-        // Descargar imagen desde URL
-        const response = await fetch(value)
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-        }
-
-        const buffer = await response.buffer()
-
-        // Verificar que sea una imagen
-        const contentType = response.headers.get('content-type')
-        if (!contentType || !contentType.startsWith('image/')) {
-          return m.reply('❌ La URL no apunta a una imagen válida.')
-        }
-
-        // Crear directorio si no existe
-        const dirPath = path.dirname(logoPath)
-        if (!fs.existsSync(dirPath)) {
-          fs.mkdirSync(dirPath, { recursive: true })
-        }
-
-        // Guardar localmente también
-        fs.writeFileSync(logoPath, buffer)
-
-        // Guardar URL en configuración
-        config.logoUrl = value
-        config.logo = logoPath
-        config.updatedAt = new Date().toISOString()
-
-        fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
-
-        // Actualizar en memoria
-        conn.subConfig = conn.subConfig || {}
-        conn.subConfig.logoUrl = value
         conn.subConfig.logo = logoPath
 
         // Actualizar mapa global
@@ -301,12 +314,12 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
         // Enviar confirmación con preview
         await conn.sendMessage(m.chat, {
           image: buffer,
-          caption: `✅ Logo desde URL actualizado\n\n*URL:* ${value.substring(0, 50)}...\n*Tipo:* ${contentType}`
+          caption: `✅ Logo actualizado correctamente\n\n• *Tipo:* ${sourceType}\n• *Origen:* ${sourceInfo}`
         }, { quoted: m })
 
       } catch (error) {
         console.error(error)
-        return m.reply(`❌ Error al descargar la imagen:\n${error.message}`)
+        return m.reply(`❌ Error al procesar el logo:\n${error.message}`)
       }
       break
     }
@@ -322,7 +335,7 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
       delete config.logoUrl
       config.updatedAt = new Date().toISOString()
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2))
+      await saveConfig(configPath, config)
 
       // Actualizar en memoria
       if (conn.subConfig) {
@@ -343,11 +356,11 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
 
       // Guardar estado actual para reconexión
       await saveSubBotState(conn)
-      
+
       // Marcar para reconexión automática
       if (!global.pendingReconnections) global.pendingReconnections = new Set()
       global.pendingReconnections.add(conn.user.jid)
-      
+
       // Guardar configuración actual
       conn.subConfig = conn.subConfig || config
       conn.subConfig.autoReconnect = true
@@ -360,12 +373,12 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
             conn.ws.close()
           }
           console.log(chalk.yellow(`🔄 SubBot ${conn.user.jid} reiniciado por solicitud`))
-          
+
           // Programar reconexión automática
           setTimeout(() => {
             reconnectSubBot(conn.user.jid)
           }, 5000)
-          
+
         } catch (error) {
           console.error('Error al reiniciar SubBot:', error)
         }
@@ -375,23 +388,23 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
 
     case 'softrestart': {
       await m.reply('🔄 Reinicio suave iniciado... Manteniendo sesión activa.')
-      
+
       // Reinicio sin cerrar completamente la conexión
       try {
         // Guardar estado
         await saveSubBotState(conn)
-        
+
         // Enviar señal de reinicio interno
         if (conn.ev) {
           // Simular reconexión sin cerrar WebSocket
           conn.ev.emit('connection.update', { connection: 'connecting' })
-          
+
           setTimeout(() => {
             conn.ev.emit('connection.update', { connection: 'open' })
             console.log(chalk.green(`✅ SubBot ${conn.user.jid} reiniciado suavemente`))
           }, 3000)
         }
-        
+
       } catch (error) {
         console.error('Error en reinicio suave:', error)
       }
@@ -403,6 +416,7 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
       const defaultConfig = {
         name: `SubBot ${sessionId}`,
         prefix: global.prefix,
+        sinprefix: false, // Por defecto requiere prefijo
         mode: 'public',
         antiPrivate: false,
         gponly: false,
@@ -422,7 +436,7 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
         fs.unlinkSync(statePath)
       }
 
-      fs.writeFileSync(configPath, JSON.stringify(defaultConfig, null, 2))
+      await saveConfig(configPath, defaultConfig)
 
       // Actualizar en memoria
       conn.subConfig = defaultConfig
@@ -441,14 +455,14 @@ const handler = async (m, { conn, usedPrefix, command, text, args }) => {
   }
 }
 
-// ============= FUNCIONES DE RECONEXIÓN AUTOMÁTICA =============
+// ============= FUNCIONES AUXILIARES =============
 
 // Función para guardar estado del SubBot
 async function saveSubBotState(conn) {
   try {
     const sessionId = conn.user.jid.split('@')[0]
     const statePath = path.join(global.jadi, sessionId, 'state.json')
-    
+
     const state = {
       jid: conn.user.jid,
       name: conn.user.name || conn.subConfig?.name,
@@ -461,16 +475,16 @@ async function saveSubBotState(conn) {
       lastConnected: new Date().toISOString(),
       version: global.vs || '1.4'
     }
-    
+
     // Crear directorio si no existe
     const dirPath = path.dirname(statePath)
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true })
     }
-    
+
     fs.writeFileSync(statePath, JSON.stringify(state, null, 2))
     console.log(chalk.green(`✅ Estado guardado para ${sessionId}`))
-    
+
   } catch (error) {
     console.error(chalk.red(`❌ Error guardando estado:`, error))
   }
@@ -482,31 +496,28 @@ async function reconnectSubBot(jid) {
     const sessionId = jid.split('@')[0]
     const statePath = path.join(global.jadi, sessionId, 'state.json')
     const configPath = path.join(global.jadi, sessionId, 'config.json')
-    
+
     if (!fs.existsSync(statePath)) {
       console.log(chalk.yellow(`⚠️ No hay estado guardado para ${sessionId}`))
       return false
     }
-    
+
     console.log(chalk.blue(`🔗 Intentando reconectar SubBot ${sessionId}...`))
-    
+
     // Cargar configuración
     let config = {}
     if (fs.existsSync(configPath)) {
       config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
     }
-    
+
     // Verificar si la auto-reconexión está activada
     if (config.autoReconnect === false) {
       console.log(chalk.yellow(`⚠️ Auto-reconexión desactivada para ${sessionId}`))
       return false
     }
-    
-    // Aquí iría la lógica para reconectar usando las credenciales guardadas
-    // Esto dependerá de cómo manejas la creación de sockets en tu proyecto
-    
+
     console.log(chalk.green(`✅ SubBot ${sessionId} programado para reconexión`))
-    
+
     // Enviar notificación al dueño si está disponible
     if (config.owner) {
       try {
@@ -518,9 +529,9 @@ async function reconnectSubBot(jid) {
         console.error('Error enviando notificación:', e)
       }
     }
-    
+
     return true
-    
+
   } catch (error) {
     console.error(chalk.red(`❌ Error reconectando SubBot:`, error))
     return false
@@ -530,7 +541,7 @@ async function reconnectSubBot(jid) {
 // Función para obtener estado de conexión
 function getConnectionStatus(conn) {
   if (!conn.ws) return '❓ Desconocido'
-  
+
   switch (conn.ws.readyState) {
     case 0: return '🔄 Conectando'
     case 1: return '✅ Conectado'
@@ -540,7 +551,7 @@ function getConnectionStatus(conn) {
   }
 }
 
-// Función para obtener el logo del SubBot (EXPORTADA)
+// Función para obtener el logo del SubBot
 export async function getSubBotLogo(conn) {
   try {
     // Verificar si hay configuración de SubBot
@@ -606,77 +617,3 @@ async function saveConfig(path, config) {
     global.subBotsData.set(path, config)
   }
 }
-
-// ============= INICIALIZAR SISTEMA DE AUTO-RECONEXIÓN =============
-
-// Función para verificar y reconectar SubBots automáticamente
-export async function checkAndReconnectSubBots() {
-  console.log(chalk.cyan('🔍 Verificando SubBots desconectados...'))
-  
-  if (!fs.existsSync(global.jadi)) {
-    return
-  }
-  
-  const subBotDirs = fs.readdirSync(global.jadi)
-    .filter(dir => {
-      const dirPath = path.join(global.jadi, dir)
-      return fs.statSync(dirPath).isDirectory()
-    })
-  
-  for (const dir of subBotDirs) {
-    const configPath = path.join(global.jadi, dir, 'config.json')
-    const statePath = path.join(global.jadi, dir, 'state.json')
-    
-    if (fs.existsSync(configPath) && fs.existsSync(statePath)) {
-      try {
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-        
-        // Verificar si está configurado para auto-reconexión
-        if (config.autoReconnect !== false) {
-          const jid = `${dir}@s.whatsapp.net`
-          
-          // Verificar si ya está conectado
-          const isConnected = global.conns?.some(conn => 
-            conn?.user?.jid === jid && 
-            conn.ws?.readyState === 1
-          )
-          
-          if (!isConnected) {
-            console.log(chalk.yellow(`🔄 Programando reconexión para ${dir}...`))
-            
-            // Esperar un tiempo aleatorio para evitar sobrecarga
-            const delay = Math.random() * 15000 + 5000
-            
-            setTimeout(() => {
-              reconnectSubBot(jid)
-            }, delay)
-          }
-        }
-      } catch (error) {
-        console.error(chalk.red(`❌ Error verificando ${dir}:`, error))
-      }
-    }
-  }
-}
-
-// Ejecutar verificación periódica
-if (typeof setInterval !== 'undefined') {
-  // Verificar cada 2 minutos
-  setInterval(() => {
-    checkAndReconnectSubBots()
-  }, 120000)
-  
-  // Verificar al iniciar después de 30 segundos
-  setTimeout(() => {
-    checkAndReconnectSubBots()
-  }, 30000)
-}
-
-handler.help = ['config', 'configsub']
-handler.tags = ['subbot']
-handler.command = ['config', 'configsub']
-handler.premium = false
-handler.group = false
-handler.private = false
-
-export default handler
