@@ -431,4 +431,267 @@ const handler = async (m, { conn, usedPrefix, args }) => {
         if (user.coin < repairCost) {
             return m.reply(`💰 No tienes suficiente dinero. Necesitas ¥${repairCost.toLocaleString()}, tienes ¥${user.coin.toLocaleString()}`);
         }
-      
+        
+        user.coin -= repairCost;
+        user.inventory.durability[toolType] = 100;
+        
+        await m.reply(`🔧 ¡Reparación exitosa!\n\nHas reparado tu ${item} por ¥${repairCost.toLocaleString()}\n💰 Saldo restante: ¥${user.coin.toLocaleString()}\n\n¡Tu herramienta está como nueva!`);
+        await global.db.write();
+        return;
+    }
+    
+    // PROCESAR VENTA DE RECURSOS
+    else if (action === 'vender' && item) {
+        const amountArg = args[3]?.toLowerCase();
+        
+        // Vender TODO
+        if (item === 'all') {
+            const resources = user.inventory?.resources || {};
+            if (Object.keys(resources).length === 0) {
+                return m.reply(`❌ No tienes recursos para vender`);
+            }
+            
+            let totalEarned = 0;
+            let soldItems = [];
+            
+            for (const [id, amount] of Object.entries(resources)) {
+                let value = 0;
+                // Buscar valor del recurso
+                for (const category of Object.values(RESOURCE_SYSTEM.RESOURCES)) {
+                    if (category[id]) {
+                        value = category[id].value;
+                        break;
+                    }
+                }
+                
+                if (value > 0) {
+                    const itemValue = value * amount;
+                    totalEarned += itemValue;
+                    soldItems.push({ id, amount, value: itemValue });
+                }
+            }
+            
+            if (totalEarned === 0) {
+                return m.reply(`❌ No se pueden vender tus recursos`);
+            }
+            
+            // Agregar al tracking diario
+            const totalAmount = soldItems.reduce((sum, item) => sum + item.amount, 0);
+            user.soldToday = (user.soldToday || 0) + totalAmount;
+            
+            user.coin += totalEarned;
+            user.inventory.resources = {};
+            
+            let soldText = `💰 ¡Venta masiva exitosa!\n\n`;
+            soldItems.forEach(item => {
+                soldText += `▸ ${item.id}: ${item.amount} → ¥${item.value.toLocaleString()}\n`;
+            });
+            soldText += `\n💰 Total ganado: ¥${totalEarned.toLocaleString()}\n`;
+            soldText += `💰 Saldo actual: ¥${user.coin.toLocaleString()}`;
+            
+            await m.reply(soldText);
+            await global.db.write();
+            return;
+        }
+        
+        // Vender por rareza
+        else if (item === 'common' || item === 'rare' || item === 'epic') {
+            const resources = user.inventory?.resources || {};
+            let totalEarned = 0;
+            let soldItems = [];
+            
+            for (const [id, amount] of Object.entries(resources)) {
+                let resourceData = null;
+                // Buscar recurso
+                for (const category of Object.values(RESOURCE_SYSTEM.RESOURCES)) {
+                    if (category[id]) {
+                        resourceData = category[id];
+                        break;
+                    }
+                }
+                
+                if (resourceData && 
+                    ((item === 'common' && resourceData.rarity === 'common') ||
+                     (item === 'rare' && (resourceData.rarity === 'rare' || resourceData.rarity === 'uncommon')) ||
+                     (item === 'epic' && (resourceData.rarity === 'epic' || resourceData.rarity === 'legendary' || resourceData.rarity === 'mythic')))) {
+                    
+                    const itemValue = resourceData.value * amount;
+                    totalEarned += itemValue;
+                    soldItems.push({ id, name: resourceData.name, amount, value: itemValue, rarity: resourceData.rarity });
+                }
+            }
+            
+            if (totalEarned === 0) {
+                return m.reply(`❌ No tienes recursos de rareza "${item}" para vender`);
+            }
+            
+            // Agregar al tracking diario
+            const totalAmount = soldItems.reduce((sum, item) => sum + item.amount, 0);
+            user.soldToday = (user.soldToday || 0) + totalAmount;
+            
+            user.coin += totalEarned;
+            // Eliminar recursos vendidos
+            soldItems.forEach(sold => {
+                delete user.inventory.resources[sold.id];
+            });
+            
+            let soldText = `💰 ¡Venta por rareza exitosa!\n\n`;
+            soldText += `▸ Rareza: ${item.toUpperCase()}\n`;
+            soldItems.forEach(item => {
+                soldText += `▸ ${item.name}: ${item.amount} → ¥${item.value.toLocaleString()}\n`;
+            });
+            soldText += `\n💰 Total ganado: ¥${totalEarned.toLocaleString()}\n`;
+            soldText += `💰 Saldo actual: ¥${user.coin.toLocaleString()}`;
+            
+            await m.reply(soldText);
+            await global.db.write();
+            return;
+        }
+        
+        // Vender recurso específico
+        else {
+            let amount = 0;
+            
+            if (amountArg === 'all') {
+                amount = user.inventory?.resources?.[item] || 0;
+            } else {
+                amount = parseInt(amountArg) || 1;
+            }
+            
+            if (!user.inventory?.resources?.[item] || user.inventory.resources[item] < amount) {
+                return m.reply(`❌ No tienes suficiente "${item}". Tienes: ${user.inventory?.resources?.[item] || 0}`);
+            }
+            
+            // Buscar valor del recurso
+            let value = 0;
+            let resourceName = item;
+            for (const category of Object.values(RESOURCE_SYSTEM.RESOURCES)) {
+                if (category[item]) {
+                    value = category[item].value;
+                    resourceName = category[item].name;
+                    break;
+                }
+            }
+            
+            if (value === 0) {
+                return m.reply(`❌ No se puede vender "${item}"`);
+            }
+            
+            const totalValue = value * amount;
+            
+            // Agregar al tracking diario
+            user.soldToday = (user.soldToday || 0) + amount;
+            
+            user.coin += totalValue;
+            user.inventory.resources[item] -= amount;
+            if (user.inventory.resources[item] <= 0) {
+                delete user.inventory.resources[item];
+            }
+            
+            await m.reply(`💰 ¡Venta exitosa!\n\nHas vendido ${amount} ${resourceName} por ¥${totalValue.toLocaleString()}\n💰 Saldo actual: ¥${user.coin.toLocaleString()}`);
+            await global.db.write();
+            return;
+        }
+    }
+    
+    // COMPRAR RECURSOS DIRECTAMENTE
+    else if (action === 'comprarrecurso' && item) {
+        const amount = parseInt(args[3]) || 1;
+        
+        if (amount < 1) {
+            return m.reply(`❌ Cantidad inválida. Mínimo 1`);
+        }
+        
+        // Lista de recursos comprables
+        const buyableResources = {
+            'stone': { name: 'Piedra', emoji: '🪨', price: 10 },
+            'wood': { name: 'Madera', emoji: '🪵', price: 8 },
+            'fish': { name: 'Pescado', emoji: '🐟', price: 12 },
+            'iron': { name: 'Hierro', emoji: '⚙️', price: 30 },
+            'gold': { name: 'Oro', emoji: '🟡', price: 60 }
+        };
+        
+        const resource = buyableResources[item];
+        if (!resource) {
+            return m.reply(`❌ Recurso no disponible para compra. Usa ${usedPrefix}shop buy para ver opciones.`);
+        }
+        
+        const totalCost = resource.price * amount;
+        
+        if (user.coin < totalCost) {
+            return m.reply(`💰 No tienes suficiente dinero.\nNecesitas: ¥${totalCost.toLocaleString()}\nTienes: ¥${user.coin.toLocaleString()}`);
+        }
+        
+        user.coin -= totalCost;
+        if (!user.inventory.resources) user.inventory.resources = {};
+        user.inventory.resources[item] = (user.inventory.resources[item] || 0) + amount;
+        
+        await m.reply(`📦 ¡Compra de recursos exitosa!\n\nHas comprado ${amount} ${resource.emoji} ${resource.name} por ¥${totalCost.toLocaleString()}\n💰 Saldo restante: ¥${user.coin.toLocaleString()}`);
+        await global.db.write();
+        return;
+    }
+    
+    // COMPRAR ITEMS ESPECIALES
+    else if (action === 'comprarespecial' && item) {
+        const specialItems = {
+            'repair_kit': { name: 'Kit de Reparación Completo', emoji: '🔧', price: 5000, effect: 'repair_all' },
+            'luck_charm': { name: 'Amuleto de la Suerte', emoji: '🍀', price: 10000, effect: 'luck_boost' },
+            'double_rewards': { name: 'Poción de Recompensas Dobles', emoji: '🧪', price: 15000, effect: 'double_rewards' },
+            'character_ticket': { name: 'Ticket de Personaje', emoji: '🎫', price: 25000, effect: 'character_ticket' }
+        };
+        
+        const specialItem = specialItems[item];
+        if (!specialItem) {
+            return m.reply(`❌ Item especial no encontrado. Usa ${usedPrefix}shop special para ver opciones.`);
+        }
+        
+        if (user.coin < specialItem.price) {
+            return m.reply(`💰 No tienes suficiente dinero.\nNecesitas: ¥${specialItem.price.toLocaleString()}\nTienes: ¥${user.coin.toLocaleString()}`);
+        }
+        
+        user.coin -= specialItem.price;
+        
+        // Aplicar efecto del item
+        switch(specialItem.effect) {
+            case 'repair_all':
+                user.inventory.durability.pickaxe = 100;
+                user.inventory.durability.axe = 100;
+                user.inventory.durability.fishingRod = 100;
+                await m.reply(`🔧 ¡Kit de reparación activado!\n\nTodas tus herramientas han sido reparadas al 100%\n💰 Saldo restante: ¥${user.coin.toLocaleString()}`);
+                break;
+                
+            case 'luck_boost':
+                if (!user.buffs) user.buffs = {};
+                user.buffs.luck_charm = Date.now() + (24 * 60 * 60 * 1000); // 24 horas
+                await m.reply(`🍀 ¡Amuleto de la suerte activado!\n\nTienes +20% de probabilidad de recursos raros por 24 horas\n💰 Saldo restante: ¥${user.coin.toLocaleString()}`);
+                break;
+                
+            case 'double_rewards':
+                if (!user.buffs) user.buffs = {};
+                user.buffs.double_rewards = 10; // 10 actividades
+                await m.reply(`🧪 ¡Poción de recompensas dobles activada!\n\nRecibirás el doble de recursos en tus próximas 10 actividades\n💰 Saldo restante: ¥${user.coin.toLocaleString()}`);
+                break;
+                
+            case 'character_ticket':
+                if (!user.tickets) user.tickets = {};
+                user.tickets.character = (user.tickets.character || 0) + 1;
+                await m.reply(`🎫 ¡Ticket de personaje obtenido!\n\nTienes ${user.tickets.character} ticket(s) de personaje\nUsa /canjear ticket para obtener un personaje aleatorio\n💰 Saldo restante: ¥${user.coin.toLocaleString()}`);
+                break;
+        }
+        
+        await global.db.write();
+        return;
+    }
+
+    text += `\n╰━━━━━━━━━━━━━━━━━━━━━╯\n`;
+    text += `🔄 *Actualizado:* ${new Date().toLocaleTimeString()}`;
+
+    await conn.reply(m.chat, text, m);
+};
+
+handler.help = ['shop', 'tienda'];
+handler.tags = ['rpg'];
+handler.command = ['shop', 'tienda'];
+handler.group = true;
+
+export default handler;
