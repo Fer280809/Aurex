@@ -1,70 +1,121 @@
-let handler = async (m, { conn, command, usedPrefix }) => {
-if (!global.db.data.chats[m.chat].economy && m.isGroup) {
-return m.reply(`《✦》Los comandos de *Economía* están desactivados en este grupo.\n\nUn *administrador* puede activarlos con el comando:\n» *${usedPrefix}economy on*`)
-}
-let user = global.db.data.users[m.sender]
-if (!user) global.db.data.users[m.sender] = user = { coin: 0, bank: 0, exp: 0, lastFish: 0 }
-const cooldown = 12 * 60 * 1000
-const ahora = Date.now()
-if (ahora < user.lastFish) {
-const restante = user.lastFish - ahora
-const wait = formatTimeMs(restante)
-return conn.reply(m.chat, `ꕥ Debes esperar *${wait}* para usar *${usedPrefix + command}* de nuevo.`, m)
-}
-user.lastFish = ahora + cooldown
-const evento = pickRandom(eventos)
-let monedas, experiencia
-if (evento.tipo === 'victoria') {
-monedas = Math.floor(Math.random() * 2001) + 11000
-experiencia = Math.floor(Math.random() * 61) + 30
-user.coin += monedas
-user.exp += experiencia
-} else {
-monedas = Math.floor(Math.random() * 2001) + 5000
-experiencia = Math.floor(Math.random() * 31) + 30
-user.coin -= monedas
-user.exp -= experiencia
-if (user.exp < 0) user.exp = 0
-if (user.coin < 0) user.coin = 0
-}
-const resultado = `❀ ${evento.mensaje} *¥${monedas.toLocaleString()} ${currency}*`
-await conn.reply(m.chat, resultado, m)
-await global.db.write()
+// ============================================
+// plugins/rpg/fishing.js
+// ============================================
+import { RESOURCE_SYSTEM, getRandomResource, calculateResourceAmount } from '../../lib/rpg/resource-system.js';
+
+const handler = async (m, { conn, usedPrefix, command }) => {
+    if (!global.db.data.chats[m.chat].economy && m.isGroup) {
+        return m.reply(`🚫 *Economía desactivada*\n\nUn *administrador* puede activarla con:\n» *${usedPrefix}economy on*`);
+    }
+
+    const user = global.db.data.users[m.sender];
+    
+    // Inicializar inventario
+    if (!user.inventory) {
+        user.inventory = {
+            resources: {},
+            tools: { pickaxe: 'basic', axe: 'basic', fishingRod: 'basic' },
+            durability: { pickaxe: 100, axe: 100, fishingRod: 100 }
+        };
+    }
+
+    // Verificar cooldown
+    const now = Date.now();
+    const cooldown = 4 * 60 * 1000; // 4 minutos
+    user.lastFish = user.lastFish || 0;
+    
+    if (now - user.lastFish < cooldown) {
+        const remaining = cooldown - (now - user.lastFish);
+        const minutes = Math.floor(remaining / 60000);
+        const seconds = Math.floor((remaining % 60000) / 1000);
+        return m.reply(`⏰ Debes esperar *${minutes}:${seconds.toString().padStart(2, '0')}* para pescar de nuevo.`);
+    }
+
+    // Verificar caña
+    const rodType = user.inventory.tools.fishingRod;
+    const rodData = RESOURCE_SYSTEM.TOOLS.FISHING_RODS[rodType];
+    
+    if (!rodData) {
+        return m.reply(`❌ No tienes una caña. Compra una en la tienda:\n» ${usedPrefix}shop`);
+    }
+
+    let durability = user.inventory.durability?.fishingRod || 100;
+    if (durability <= 0) {
+        return m.reply(`🛠️ Tu caña está rota. Repárala en la tienda:\n» ${usedPrefix}shop repair`);
+    }
+
+    // Pescar
+    user.lastFish = now;
+    durability -= 3 + Math.floor(Math.random() * 6);
+    if (durability < 0) durability = 0;
+    user.inventory.durability.fishingRod = durability;
+
+    // Obtener recurso
+    const resource = getRandomResource('FISHING', rodData.level);
+    const amount = calculateResourceAmount(rodData.level, rodData.efficiency);
+    
+    if (!user.inventory.resources[resource.id]) {
+        user.inventory.resources[resource.id] = 0;
+    }
+    user.inventory.resources[resource.id] += amount;
+
+    // Recompensa especial para dueños
+    let bonus = 0;
+    let extraAmount = 0;
+    if (global.owner && global.owner.includes(m.sender)) {
+        bonus = Math.floor(resource.value * 2);
+        extraAmount = amount;
+    }
+    if (global.fernando && global.fernando.includes(m.sender)) {
+        bonus = Math.floor(resource.value * 3);
+        extraAmount = amount * 2;
+    }
+
+    const coinReward = Math.floor(resource.value * (amount + extraAmount) * 0.7) + bonus;
+    user.coin = (user.coin || 0) + coinReward;
+
+    // Verificar misión diaria
+    checkDailyMission(user, 'fish', amount + extraAmount);
+
+    const result = `🎣 *PESCA EXITOSA*\n
+▸ Herramienta: ${rodData.emoji} ${rodData.name}
+▸ Durabilidad restante: ${durability}%
+▸ Recurso obtenido: ${resource.emoji} ${resource.name} x${amount + extraAmount}
+▸ Valor: ¥${(resource.value * (amount + extraAmount)).toLocaleString()}
+▸ Monedas ganadas: ¥${coinReward.toLocaleString()}
+${bonus > 0 ? `✨ *Bono especial:* +¥${bonus.toLocaleString()}` : ''}`;
+
+    await conn.reply(m.chat, result, m);
+    await global.db.write();
+};
+
+function checkDailyMission(user, type, amount) {
+    if (!user.inventory?.missions) return;
+    
+    const missions = user.inventory.missions.daily;
+    const today = new Date().toDateString();
+    
+    if (missions.lastCompleted !== today) {
+        missions.completed = [];
+        missions.lastCompleted = today;
+    }
+    
+    if (!missions.completed.includes('fish_8')) {
+        const fished = user.fishedToday || 0;
+        user.fishedToday = fished + amount;
+        
+        if (user.fishedToday >= 8) {
+            missions.completed.push('fish_8');
+            missions.streak = (missions.streak || 0) + 1;
+            user.coin += 400;
+            user.inventory.resources['salmon'] = (user.inventory.resources['salmon'] || 0) + 8;
+        }
+    }
 }
 
-handler.tags = ['rpg']
-handler.help = ['pescar', 'fish']
-handler.command = ['pescar', 'fish']
-handler.group = true
+handler.help = ['fish', 'pescar'];
+handler.tags = ['rpg'];
+handler.command = ['fish', 'pescar'];
+handler.group = true;
 
-export default handler
-
-function formatTimeMs(ms) {
-const totalSec = Math.ceil(ms / 1000)
-const min = Math.floor(totalSec / 60)
-const sec = totalSec % 60
-const partes = []
-if (min) partes.push(`${min} minuto${min !== 1 ? 's' : ''}`)
-partes.push(`${sec} segundo${sec !== 1 ? 's' : ''}`)
-return partes.join(' ')
-}
-function pickRandom(list) {
-return list[Math.floor(Math.random() * list.length)]
-}
-const eventos = [
-{ tipo: 'victoria', mensaje: '¡Has pescado un Salmón! Su sabor es exquisito, ganaste.' },
-{ tipo: 'victoria', mensaje: '¡Has pescado una Trucha! Su frescura es admirable, ganaste.' },
-{ tipo: 'victoria', mensaje: '¡Has capturado un Tiburón! Fue una intensa pelea, ganaste.' },
-{ tipo: 'victoria', mensaje: '¡Increíble! Has pescado una Ballena. Fue una experiencia única, ganaste.' },
-{ tipo: 'victoria', mensaje: '¡Has capturado un Pez Payaso! Colorido y travieso, ganaste.' },
-{ tipo: 'victoria', mensaje: '¡Has atrapado una Anguila Dorada! Rara y valiosa, ganaste.' },
-{ tipo: 'victoria', mensaje: '¡Has pescado un Mero Gigante! El esfuerzo valió la pena, ganaste.' },
-{ tipo: 'victoria', mensaje: '¡Has capturado un Pulpo de tinta azul! Astuto pero tuyo, ganaste.' },
-{ tipo: 'victoria', mensaje: '¡Sacaste una Carpa Real! Su peso impresiona, ganaste.' },
-{ tipo: 'victoria', mensaje: '¡Has conseguido un Pez Dragón! Criatura legendaria, ganaste.' },
-{ tipo: 'derrota', mensaje: 'Has sacado basura: una bolsa de plástico, perdiste.' },
-{ tipo: 'derrota', mensaje: 'Has sacado basura: una lata vieja, perdiste.' },
-{ tipo: 'derrota', mensaje: 'No pescaste nada esta vez. El agua estaba en calma, perdiste.' },
-{ tipo: 'derrota', mensaje: 'Tu línea se rompió al atrapar algo enorme, perdiste.' },
-{ tipo: 'derrota', mensaje: 'El pez se soltó justo al llegar a la superficie, perdiste.' }
-]
+export default handler;
