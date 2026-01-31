@@ -33,8 +33,8 @@ global.fernando = ["5214183357841"]
 
 // ============= CONFIGURACIÓN DEL BOT =============
 global.libreria = "Baileys Multi Device"
-global.vs = "1.4" // Versión actualizada
-global.nameqr = "ᴀsᴛᴀ-ʙᴏᴛ"
+global.vs = "1.4" 
+global.nameqr = "『𝕬𝖘𝖙𝖆-𝕭𝖔𝖙』"
 global.sessions = "Sessions/Principal"
 global.jadi = "Sessions/SubBot"
 global.AstaJadibts = true
@@ -44,11 +44,11 @@ global.prefix = new RegExp('^[#!./-]?')
 global.sinprefix = true // Bot principal puede responder sin prefijo
 
 // ============= PERSONALIZACIÓN =============
-global.botname = "ᴀsᴛᴀ-ʙᴏᴛ"
-global.textbot = "ᴀsᴛᴀ-ʙᴏᴛ • Powered By ғᴇʀɴᴀɴᴅᴏ"
+global.botname = "『𝕬𝖘𝖙𝖆-𝕭𝖔𝖙』"
+global.textbot = "『𝕬𝖘𝖙𝖆-𝕭𝖔𝖙』 • Powered By 𝕱𝖊𝖗𝖓𝖆𝖓𝖉𝖔"
 global.dev = "Powered By ғᴇʀɴᴀɴᴅᴏ"
-global.author = "ᴀsᴛᴀ-ʙᴏᴛ • Powered By ғᴇʀɴᴀɴᴅᴏ"
-global.etiqueta = "ғᴇʀɴᴀɴᴅᴏ"
+global.author = "『𝕬𝖘𝖙𝖆-𝕭𝖔𝖙』 • Powered By 𝕱𝖊𝖗𝖓𝖆𝖓𝖉𝖔"
+global.etiqueta = "𝕱𝖊𝖗𝖓𝖆𝖓𝖉𝖔"
 global.currency = "¥enes"
 
 // URLs
